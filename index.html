@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Fleet Plan"/>
+<meta name="theme-color" content="#FF6600"/>
+<title>Fleet Plan – Sixt Harburg</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:#0d0d1a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#e8e8f0;overscroll-behavior:none;font-size:14px}
+input,select,button{font-family:inherit;font-size:14px}
+input::placeholder{color:#444}
+select option{background:#1a1a2e}
+.inp{background:#1a1a2e;border:1px solid #2a2a45;border-radius:8px;color:#fff;padding:10px 12px;outline:none;width:100%}
+.inp:focus{border-color:#FF6600}
+.btn{background:#FF6600;color:#fff;border:none;border-radius:10px;padding:13px;width:100%;font-size:15px;font-weight:700;cursor:pointer;active:opacity:0.8}
+.btn:active{opacity:0.8}
+.card{background:#131325;border-radius:12px;padding:14px;margin-bottom:10px;border:1px solid #1f1f35}
+.del{background:#2a1515;border:1px solid #dc2626;color:#f87171;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer}
+.del:active{opacity:0.8}
+.tab-active{color:#FF6600;font-weight:700}
+.tab-inactive{color:#555;font-weight:400}
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-thumb{background:#FF6600;border-radius:2px}
+</style>
+</head>
+<body>
+
+<!-- APP STATE (vanilla JS) -->
+<div id="app"></div>
+
+<script>
+const O="#FF6600";
+const CAT_ORDER=["M","E","H","C","D","I","J","S","R","F","G","P","U","L","W","X"];
+const CATS={M:"Mini",E:"Economy",H:"Economy Elite",C:"Compact",D:"Compact Elite",I:"Intermediate",J:"Intermediate Elite",S:"Standard",R:"Standard Elite",F:"Fullsize",G:"Fullsize Elite",P:"Premium",U:"Premium Elite",L:"Luxury",W:"Luxury Elite",X:"Exklusiv"};
+const BODIES={B:"2-türig",D:"4-türig",L:"Gran Coupé",W:"Kombi",F:"SUV",T:"Cabriolet",E:"Coupé",V:"Transporter",Z:"Glücksauto"};
+const TRANS={M:"Schalt",A:"Automatik",D:"Allrad",L:"Luxus",S:"Spezial"};
+const FAMILY={B:"PKW",D:"PKW",L:"PKW",W:"Kombi",F:"SUV",T:"Cabrio",E:"Coupé",V:"Transporter",Z:"Sonstige"};
+const STATUS={
+  "0":{label:"Verfügbar",   color:"#16a34a",bg:"#dcfce7",icon:"✅"},
+  "3":{label:"Reserviert",  color:"#d97706",bg:"#fef3c7",icon:"🔒"},
+  "4":{label:"Aufbereitung",color:"#2563eb",bg:"#dbeafe",icon:"⏳"},
+  "5":{label:"Kaputt",      color:"#dc2626",bg:"#fee2e2",icon:"🔧"},
+  "6":{label:"Kaputt",      color:"#dc2626",bg:"#fee2e2",icon:"🔧"},
+};
+
+function parseA(code){
+  if(!code||code.length<4)return null;
+  const c=code.toUpperCase();
+  return{raw:c,cat:c[0],body:c[1],trans:c[2],fuel:c[3],
+    catLabel:CATS[c[0]]||c[0],bodyLabel:BODIES[c[1]]||c[1],
+    transLabel:TRANS[c[2]]||c[2],family:FAMILY[c[1]]||"?",
+    catIdx:CAT_ORDER.indexOf(c[0]),isAuto:c[2]==="A"||c[2]==="D"};
+}
+
+function score(booked,avail){
+  const b=parseA(booked),a=parseA(avail);
+  if(!b||!a)return-999;
+  if(b.isAuto&&!a.isAuto)return-999;
+  if(a.catIdx<b.catIdx)return-999;
+  let s=0;
+  if(a.raw===b.raw)s+=100;
+  if(a.family===b.family)s+=50;
+  if(a.cat===b.cat)s+=30;
+  if(!b.isAuto&&!a.isAuto)s+=40;
+  if(!b.isAuto&&a.isAuto)s+=5;
+  if(b.isAuto&&a.isAuto)s+=20;
+  s-=(a.catIdx-b.catIdx)*5;
+  return s;
+}
+
+function autoMatch(drops,resis){
+  const pool=drops.filter(d=>d.status==="0"||d.status==="4");
+  const used=new Set();
+  return resis.map(r=>{
+    const cands=pool
+      .filter(d=>!used.has(d.id))
+      .map(d=>({d,s:score(r.acriss,d.acriss)}))
+      .filter(x=>x.s>-999)
+      .sort((a,b)=>b.s-a.s);
+    if(!cands.length)return{r,d:null,type:"none"};
+    const best=cands[0];
+    used.add(best.d.id);
+    const type=parseA(r.acriss)?.raw===parseA(best.d.acriss)?.raw?"exact":"upgrade";
+    return{r,d:best.d,type};
+  });
+}
+
+// STATE
+let state={
+  tab:"plan",
+  drops:[
+    {id:1,time:"08:00",plate:"M-LC 4916", acriss:"GTAR",vehicle:"BMW Serie",       lor:"3", status:"0"},
+    {id:2,time:"12:00",plate:"S-XY 1545", acriss:"LVAR",vehicle:"Nissan Primasta", lor:"2", status:"0"},
+    {id:3,time:"12:30",plate:"HH-AD 9310",acriss:"GDAR",vehicle:"Mercedes Benz",   lor:"4", status:"0"},
+    {id:4,time:"13:00",plate:"M-ZB 3897", acriss:"UDAR",vehicle:"Audi A6 TDI",     lor:"7", status:"0"},
+    {id:5,time:"15:00",plate:"M-KS 3374", acriss:"CTMR",vehicle:"VW T-Roc",        lor:"3", status:"0"},
+    {id:6,time:"16:00",plate:"M-PL 6965", acriss:"DDAR",vehicle:"Audi A3",         lor:"4", status:"0"},
+    {id:7,time:"17:00",plate:"M-KB 6229", acriss:"CDAR",vehicle:"Skoda SCALA",     lor:"24",status:"0"},
+    {id:8,time:"17:30",plate:"M-HB 4799", acriss:"UFAR",vehicle:"BMW X3",          lor:"4", status:"0"},
+    {id:9,time:"18:00",plate:"M-ZB 5530", acriss:"IFAR",vehicle:"Mazda CX-30",     lor:"2", status:"3"},
+    {id:10,time:"18:00",plate:"M-PL 5908",acriss:"CWMR",vehicle:"VW Golf Kombi",   lor:"4", status:"4"},
+    {id:11,time:"20:00",plate:"SI-QL 1766",acriss:"LVAR",vehicle:"Nissan Primasta",lor:"3", status:"0"},
+    {id:12,time:"20:00",plate:"M-KS 4357",acriss:"SFAR",vehicle:"VW Tiguan",       lor:"3", status:"0"},
+    {id:13,time:"20:00",plate:"M-PL 3020",acriss:"EDMR",vehicle:"Opel Corsa",      lor:"3", status:"0"},
+    {id:14,time:"22:00",plate:"M-KB 3420",acriss:"PVAR",vehicle:"Ford Tourneo",    lor:"1", status:"3"},
+    {id:15,time:"23:30",plate:"M-LM 4803",acriss:"IFAO",vehicle:"Skoda Enyaq ⚡",  lor:"3", status:"0"},
+  ],
+  resis:[
+    {id:1,time:"06:00",resi:"9732144425",acriss:"DDAR",returnDate:"10.06.",lor:"3"},
+    {id:2,time:"06:30",resi:"9734836627",acriss:"CDMR",returnDate:"18.06.",lor:"11"},
+    {id:3,time:"08:00",resi:"9734978885",acriss:"CDAR",returnDate:"11.06.",lor:"4"},
+    {id:4,time:"08:00",resi:"9734939793",acriss:"CDAR",returnDate:"08.06.",lor:"1"},
+    {id:5,time:"09:00",resi:"9732835662",acriss:"IDAR",returnDate:"11.06.",lor:"4"},
+    {id:6,time:"10:00",resi:"9734001248",acriss:"DDAR",returnDate:"12.06.",lor:"4"},
+    {id:7,time:"14:00",resi:"9734792271",acriss:"CDAR",returnDate:"13.06.",lor:"5"},
+    {id:8,time:"20:00",resi:"9734933427",acriss:"CDMR",returnDate:"09.06.",lor:"1"},
+  ],
+  newDrop:{time:"",plate:"",acriss:"",vehicle:"",lor:"",status:"0"},
+  newResi:{time:"",resi:"",acriss:"",returnDate:"",lor:""},
+  toast:""
+};
+
+function setState(fn){fn(state);render()}
+
+function showToast(msg){
+  state.toast=msg;render();
+  setTimeout(()=>{state.toast="";render();},2000);
+}
+
+function el(tag,props,...children){
+  const e=document.createElement(tag);
+  if(props)Object.entries(props).forEach(([k,v])=>{
+    if(k==="style"&&typeof v==="object")Object.assign(e.style,v);
+    else if(k.startsWith("on"))e[k.toLowerCase()]=v;
+    else if(k==="class")e.className=v;
+    else e[k]=v;
+  });
+  children.flat(Infinity).forEach(c=>{
+    if(c==null||c===false)return;
+    e.appendChild(typeof c==="string"||typeof c==="number"?document.createTextNode(c):c);
+  });
+  return e;
+}
+
+function acrissTip(code){
+  const p=parseA(code);
+  if(!p)return"";
+  return`${p.catLabel} · ${p.bodyLabel} · ${p.transLabel}`;
+}
+
+function renderHeader(){
+  const tabs=[{k:"plan",icon:"📋",label:"Plan"},{k:"drops",icon:"📥",label:"Drops"},{k:"resis",icon:"📅",label:"Resis"}];
+  return el("div",{style:{background:"linear-gradient(135deg,#FF6600,#cc4400)",padding:"14px 16px",display:"flex",alignItems:"center",gap:12,position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 16px #FF660044"}},
+    el("div",{style:{fontSize:24}},"🚗"),
+    el("div",{style:{flex:1}},
+      el("div",{style:{fontSize:15,fontWeight:700}},"Fleet Plan"),
+      el("div",{style:{fontSize:10,opacity:0.8,fontFamily:"monospace"}},"Sixt Harburg · 46790")
+    ),
+    el("div",{style:{display:"flex",gap:4,background:"rgba(0,0,0,0.2)",borderRadius:8,padding:3}},
+      ...tabs.map(t=>el("button",{
+        style:{background:state.tab===t.k?"#fff":"transparent",color:state.tab===t.k?"#FF6600":"#fff",border:"none",borderRadius:6,padding:"6px 8px",fontSize:11,fontWeight:state.tab===t.k?700:400,cursor:"pointer"},
+        onClick:()=>{state.tab=t.k;render()}
+      },t.icon," ",t.label))
+    )
+  );
+}
+
+function renderKPIs(matches){
+  const stats={total:matches.length,exact:matches.filter(m=>m.type==="exact").length,upgrade:matches.filter(m=>m.type==="upgrade").length,none:matches.filter(m=>m.type==="none").length};
+  const items=[
+    {label:"Total",val:stats.total,color:"#818cf8",icon:"📊"},
+    {label:"Exakt",val:stats.exact,color:"#4ade80",icon:"✅"},
+    {label:"Upgrade",val:stats.upgrade,color:"#facc15",icon:"⬆️"},
+    {label:"Fehlt",val:stats.none,color:"#f87171",icon:"🚨"},
+  ];
+  return el("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:16}},
+    ...items.map(k=>el("div",{style:{background:"#131325",border:`1px solid ${k.color}33`,borderRadius:10,padding:"10px 4px",textAlign:"center"}},
+      el("div",{style:{fontSize:14}},k.icon),
+      el("div",{style:{fontSize:20,fontWeight:700,color:k.color,fontFamily:"monospace"}},k.val),
+      el("div",{style:{fontSize:9,color:"#666",textTransform:"uppercase",letterSpacing:0.5}},k.label)
+    ))
+  );
+}
+
+function renderPlan(){
+  const matches=autoMatch(state.drops,state.resis);
+  return el("div",{},
+    renderKPIs(matches),
+    ...matches.map(m=>{
+      const ba=parseA(m.r.acriss),da=m.d?parseA(m.d.acriss):null;
+      const sc=m.type==="exact"?{label:"✅ Exakt",bg:"#dcfce7",bdr:"#16a34a",txt:"#15803d"}
+               :m.type==="upgrade"?{label:"⬆️ Upgrade",bg:"#fef9c3",bdr:"#ca8a04",txt:"#78350f"}
+               :{label:"🚨 Kein Auto",bg:"#fee2e2",bdr:"#dc2626",txt:"#991b1b"};
+      const manualExact=m.d&&ba&&da&&!ba.isAuto&&!da.isAuto;
+      const manualFallback=m.d&&ba&&da&&!ba.isAuto&&da.isAuto;
+      return el("div",{class:"card",style:{borderLeft:`3px solid ${sc.bdr}`,borderColor:`${sc.bdr}44`}},
+        // Top row
+        el("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:10}},
+          el("div",{style:{background:"#0d0d1a",borderRadius:7,padding:"5px 9px",fontFamily:"monospace",fontSize:14,fontWeight:700,color:O}},m.r.time),
+          el("div",{style:{flex:1,fontSize:10,color:"#666",fontFamily:"monospace"}},m.r.resi||""),
+          el("span",{style:{background:sc.bg,color:sc.txt,border:`1px solid ${sc.bdr}`,borderRadius:20,padding:"3px 8px",fontSize:10,fontWeight:700}},sc.label)
+        ),
+        // Cars grid
+        el("div",{style:{display:"grid",gridTemplateColumns:"1fr 20px 1fr",gap:6,alignItems:"center"}},
+          el("div",{style:{background:"#0d0d1a",borderRadius:8,padding:"10px"}},
+            el("div",{style:{fontSize:9,color:"#555",textTransform:"uppercase",marginBottom:3}},"Gebucht"),
+            el("div",{style:{fontFamily:"monospace",fontSize:17,fontWeight:700,color:"#818cf8"}},m.r.acriss),
+            el("div",{style:{fontSize:10,color:"#888"}},ba?ba.catLabel:"–"),
+            el("div",{style:{fontSize:9,color:"#666"}},ba?`${ba.bodyLabel} · ${ba.transLabel}`:"–")
+          ),
+          el("div",{style:{textAlign:"center",color:"#333",fontSize:16}},"→"),
+          el("div",{style:{background:"#0d0d1a",borderRadius:8,padding:"10px"}},
+            el("div",{style:{fontSize:9,color:"#555",textTransform:"uppercase",marginBottom:3}},"Zugeteilt"),
+            m.d
+              ? [el("div",{style:{fontFamily:"monospace",fontSize:17,fontWeight:700,color:"#fff"}},m.d.acriss),
+                 el("div",{style:{fontSize:10,color:"#ccc"}},m.d.vehicle),
+                 el("div",{style:{fontSize:9,color:"#666",fontFamily:"monospace"}},m.d.plate),
+                 m.d.status==="4"?el("div",{style:{fontSize:9,color:"#60a5fa",marginTop:2}},"⏳ Aufbereitung prüfen!"):null]
+              : el("div",{style:{color:"#f87171",fontWeight:700,fontSize:12,paddingTop:4}},"Kein Auto!")
+          )
+        ),
+        manualExact ? el("div",{style:{marginTop:8,fontSize:11,color:"#4ade80",background:"#052e16",borderRadius:6,padding:"4px 8px",display:"inline-block"}},"✅ Manual → Manual") : null,
+        manualFallback ? el("div",{style:{marginTop:8,fontSize:11,color:"#60a5fa",background:"#0c1a2e",borderRadius:6,padding:"4px 8px",display:"inline-block"}},"⬆️ Manual → Automatik (Fallback)") : null,
+        m.type==="none" ? el("div",{style:{marginTop:8,fontSize:11,color:"#fca5a5",background:"#450a0a",borderRadius:6,padding:"5px 8px"}},"🚨 Nachbarstation kontaktieren!") : null,
+        el("div",{style:{marginTop:8,fontSize:10,color:"#555"}},
+          `LOR `,el("span",{style:{color:"#818cf8",fontFamily:"monospace",fontWeight:700}},m.r.lor+"T"),
+          ` · bis `,m.r.returnDate||"–"
+        )
+      );
+    }),
+    // Rules
+    el("div",{style:{background:"#1a0a00",border:"1px solid #FF660044",borderRadius:12,padding:"12px",marginTop:4}},
+      el("div",{style:{fontWeight:700,color:O,marginBottom:8,fontSize:12}},"🚨 Regeln"),
+      ...[
+        "Manual + Manual verfügbar → Manual geben ✅",
+        "Manual + kein Manual → Automatik als Fallback ⬆️",
+        "Automatik → NUR Automatik, niemals Manual ❌",
+        "Kein Downgrade in der Kategorie ❌",
+        "Status 3 = nicht anfassen 🔒",
+        "Status 4 = Aufbereitung prüfen ⏳",
+        "Status 5/6 = kaputt, nicht vermieten 🔧",
+      ].map(r=>el("div",{style:{fontSize:11,color:"#ccc",padding:"3px 0",borderBottom:"1px solid #2a1500"}},r))
+    )
+  );
+}
+
+function renderDrops(){
+  const nd=state.newDrop;
+  return el("div",{},
+    // Form
+    el("div",{class:"card",style:{border:"1px solid #2a2a45"}},
+      el("div",{style:{fontSize:12,fontWeight:700,color:O,marginBottom:10}},"+ Drop hinzufügen"),
+      el("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}},
+        field("Uhrzeit", el("input",{class:"inp",type:"time",value:nd.time,onInput:e=>{state.newDrop.time=e.target.value}})),
+        field("Kennzeichen", el("input",{class:"inp",placeholder:"M-XX 1234",value:nd.plate,onInput:e=>{state.newDrop.plate=e.target.value.toUpperCase()}})),
+        field("ACRISS", el("div",{},
+          el("input",{class:"inp",placeholder:"CDAR",maxLength:4,value:nd.acriss,
+            style:{textTransform:"uppercase",fontFamily:"monospace",letterSpacing:2,color:nd.acriss.length===4?"#4ade80":"#fff"},
+            onInput:e=>{state.newDrop.acriss=e.target.value.toUpperCase().slice(0,4);render()}}),
+          nd.acriss.length===4?el("div",{style:{fontSize:9,color:"#4ade80",marginTop:2}},acrissTip(nd.acriss)):null
+        )),
+        field("Fahrzeug", el("input",{class:"inp",placeholder:"VW Golf",value:nd.vehicle,onInput:e=>{state.newDrop.vehicle=e.target.value}})),
+        field("LOR (Tage)", el("input",{class:"inp",type:"number",placeholder:"3",value:nd.lor,onInput:e=>{state.newDrop.lor=e.target.value}})),
+        field("Status", el("select",{class:"inp",value:nd.status,onChange:e=>{state.newDrop.status=e.target.value}},
+          el("option",{value:"0"},"0 – Verfügbar"),
+          el("option",{value:"3"},"3 – Reserviert"),
+          el("option",{value:"4"},"4 – Aufbereitung"),
+          el("option",{value:"5"},"5 – Kaputt"),
+        ))
+      ),
+      el("button",{class:"btn",onClick:()=>{
+        if(!nd.acriss||!nd.plate){showToast("⚠️ ACRISS + Kennzeichen nötig");return}
+        state.drops.push({...nd,id:Date.now()});
+        state.newDrop={time:"",plate:"",acriss:"",vehicle:"",lor:"",status:"0"};
+        showToast("✅ Drop hinzugefügt");render();
+      }},"+ Hinzufügen")
+    ),
+    // List
+    ...state.drops.map(d=>{
+      const s=STATUS[d.status]||STATUS["0"];
+      const p=parseA(d.acriss);
+      return el("div",{class:"card"},
+        el("div",{style:{display:"flex",alignItems:"center",gap:8}},
+          el("div",{style:{fontFamily:"monospace",fontSize:13,fontWeight:700,color:O,minWidth:48}},d.time||"–"),
+          el("div",{style:{flex:1}},
+            el("div",{style:{fontFamily:"monospace",fontSize:15,fontWeight:700,color:"#818cf8"}},d.acriss),
+            el("div",{style:{fontSize:12,color:"#ccc"}},d.vehicle),
+            el("div",{style:{fontSize:10,color:"#666",fontFamily:"monospace"}},d.plate," · LOR ",d.lor)
+          ),
+          el("div",{style:{textAlign:"right"}},
+            el("div",{style:{background:s.bg,color:s.color,border:`1px solid ${s.color}`,borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700,marginBottom:4}},s.icon," ",s.label),
+            el("button",{class:"del",onClick:()=>{state.drops=state.drops.filter(x=>x.id!==d.id);showToast("🗑 Gelöscht");render()}},"Löschen")
+          )
+        ),
+        p?el("div",{style:{marginTop:6,fontSize:10,color:"#555"}},p.catLabel," · ",p.bodyLabel," · ",p.transLabel):null
+      );
+    })
+  );
+}
+
+function renderResis(){
+  const nr=state.newResi;
+  return el("div",{},
+    // Form
+    el("div",{class:"card",style:{border:"1px solid #2a2a45"}},
+      el("div",{style:{fontSize:12,fontWeight:700,color:O,marginBottom:10}},"+ Reservierung hinzufügen"),
+      el("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}},
+        field("Pickup Zeit", el("input",{class:"inp",type:"time",value:nr.time,onInput:e=>{state.newResi.time=e.target.value}})),
+        field("Resi-Nr.", el("input",{class:"inp",placeholder:"9734xxxxxx",value:nr.resi,onInput:e=>{state.newResi.resi=e.target.value}})),
+        field("ACRISS", el("div",{},
+          el("input",{class:"inp",placeholder:"CDAR",maxLength:4,value:nr.acriss,
+            style:{textTransform:"uppercase",fontFamily:"monospace",letterSpacing:2,color:nr.acriss.length===4?"#4ade80":"#fff"},
+            onInput:e=>{state.newResi.acriss=e.target.value.toUpperCase().slice(0,4);render()}}),
+          nr.acriss.length===4?el("div",{style:{fontSize:9,color:"#4ade80",marginTop:2}},acrissTip(nr.acriss)):null
+        )),
+        field("Rückgabe", el("input",{class:"inp",placeholder:"12.06.",value:nr.returnDate,onInput:e=>{state.newResi.returnDate=e.target.value}})),
+        el("div",{style:{gridColumn:"span 2"}},
+          ...field("LOR (Tage)", el("input",{class:"inp",type:"number",placeholder:"4",value:nr.lor,onInput:e=>{state.newResi.lor=e.target.value}})).childNodes
+        )
+      ),
+      el("button",{class:"btn",onClick:()=>{
+        if(!nr.acriss||!nr.resi){showToast("⚠️ ACRISS + Resi-Nr. nötig");return}
+        state.resis.push({...nr,id:Date.now()});
+        state.newResi={time:"",resi:"",acriss:"",returnDate:"",lor:""};
+        showToast("✅ Reservierung hinzugefügt");render();
+      }},"+ Hinzufügen")
+    ),
+    // List
+    ...state.resis.map(r=>{
+      const p=parseA(r.acriss);
+      return el("div",{class:"card"},
+        el("div",{style:{display:"flex",alignItems:"center",gap:8}},
+          el("div",{style:{fontFamily:"monospace",fontSize:13,fontWeight:700,color:O,minWidth:48}},r.time||"–"),
+          el("div",{style:{flex:1}},
+            el("div",{style:{fontFamily:"monospace",fontSize:15,fontWeight:700,color:"#818cf8"}},r.acriss),
+            el("div",{style:{fontSize:11,color:"#888",fontFamily:"monospace"}},r.resi),
+            el("div",{style:{fontSize:10,color:"#666"}},"bis ",r.returnDate||"–"," · LOR ",r.lor,"T")
+          ),
+          el("button",{class:"del",onClick:()=>{state.resis=state.resis.filter(x=>x.id!==r.id);showToast("🗑 Gelöscht");render()}},"Löschen")
+        ),
+        p?el("div",{style:{marginTop:6,fontSize:10,color:"#555"}},p.catLabel," · ",p.bodyLabel," · ",p.transLabel):null
+      );
+    })
+  );
+}
+
+function field(label,...children){
+  return el("div",{},
+    el("div",{style:{fontSize:10,color:"#888",marginBottom:4,textTransform:"uppercase",letterSpacing:0.5}},label),
+    ...children
+  );
+}
+
+function renderBottomNav(){
+  const tabs=[{k:"plan",icon:"📋",label:"Plan"},{k:"drops",icon:"📥",label:"Drops"},{k:"resis",icon:"📅",label:"Resis"}];
+  return el("div",{style:{position:"fixed",bottom:0,left:0,right:0,background:"#0d0d1a",borderTop:"1px solid #1f1f35",display:"flex",zIndex:100}},
+    ...tabs.map(t=>el("button",{
+      style:{flex:1,background:"none",border:"none",padding:"10px 0 8px",cursor:"pointer",color:state.tab===t.k?"#FF6600":"#555"},
+      onClick:()=>{state.tab=t.k;render()}
+    },
+      el("div",{style:{fontSize:18}},t.icon),
+      el("div",{style:{fontSize:10,fontWeight:state.tab===t.k?700:400}},t.label)
+    ))
+  );
+}
+
+function render(){
+  const app=document.getElementById("app");
+  app.innerHTML="";
+  app.appendChild(renderHeader());
+  if(state.toast){
+    app.appendChild(el("div",{style:{position:"fixed",top:60,left:"50%",transform:"translateX(-50%)",background:"#1a1a2e",border:"1px solid #FF6600",borderRadius:10,padding:"10px 18px",fontSize:13,fontWeight:600,zIndex:999,color:"#fff",boxShadow:"0 4px 20px #00000088",whiteSpace:"nowrap"}},state.toast));
+  }
+  const content=el("div",{style:{padding:"14px",paddingBottom:80}});
+  if(state.tab==="plan")content.appendChild(renderPlan());
+  else if(state.tab==="drops")content.appendChild(renderDrops());
+  else content.appendChild(renderResis());
+  app.appendChild(content);
+  app.appendChild(renderBottomNav());
+}
+
+render();
+</script>
+</body>
+</html>
