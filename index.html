@@ -4,38 +4,27 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="apple-mobile-web-app-title" content="Fleet Plan"/>
 <meta name="theme-color" content="#FF6600"/>
 <title>Fleet Plan – Sixt Harburg</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 body{background:#0d0d1a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#e8e8f0;font-size:14px}
-input,select,button,textarea{font-family:inherit;font-size:14px}
-input::placeholder,textarea::placeholder{color:#444}
+input,select,button,label{font-family:inherit;font-size:14px}
+input::placeholder{color:#444}
 select option{background:#1a1a2e}
 .inp{background:#1a1a2e;border:1px solid #2a2a45;border-radius:8px;color:#fff;padding:10px 12px;outline:none;width:100%}
 .inp:focus{border-color:#FF6600}
 .btn{background:#FF6600;color:#fff;border:none;border-radius:10px;padding:13px;width:100%;font-size:15px;font-weight:700;cursor:pointer}
 .btn:active{opacity:0.8}
-.btn-scan{background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;border:none;border-radius:10px;padding:13px;width:100%;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
-.btn-scan:active{opacity:0.8}
 .card{background:#131325;border-radius:12px;padding:14px;margin-bottom:10px;border:1px solid #1f1f35}
 .del{background:#2a1515;border:1px solid #dc2626;color:#f87171;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer}
-.del:active{opacity:0.8}
-::-webkit-scrollbar{width:3px}
-::-webkit-scrollbar-thumb{background:#FF6600;border-radius:2px}
-.spinner{width:20px;height:20px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite;display:inline-block}
-@keyframes spin{to{transform:rotate(360deg)}}
-.pulse{animation:pulse 2s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+.scan-label{display:flex;align-items:center;justify-content:center;gap:8px;border-radius:10px;padding:13px;font-weight:700;cursor:pointer;position:relative;overflow:hidden;color:#fff}
+.scan-label input[type=file]{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:100px}
 </style>
 </head>
 <body>
 <div id="app"></div>
-<input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none"/>
-<input type="file" id="galleryInput" accept="image/*" style="display:none"/>
-
 <script>
 const O="#FF6600";
 const CAT_ORDER=["M","E","H","C","D","I","J","S","R","F","G","P","U","L","W","X"];
@@ -43,36 +32,27 @@ const CATS={M:"Mini",E:"Economy",H:"Economy Elite",C:"Compact",D:"Compact Elite"
 const BODIES={B:"2-türig",D:"4-türig",L:"Gran Coupé",W:"Kombi",F:"SUV",T:"Cabriolet",E:"Coupé",V:"Transporter",Z:"Glücksauto"};
 const TRANS={M:"Schalt",A:"Automatik",D:"Allrad",L:"Luxus",S:"Spezial"};
 const FAMILY={B:"PKW",D:"PKW",L:"PKW",W:"Kombi",F:"SUV",T:"Cabrio",E:"Coupé",V:"Transporter",Z:"Sonstige"};
-const STATUS={
-  "0":{label:"Verfügbar",color:"#16a34a",bg:"#dcfce7",icon:"✅"},
-  "3":{label:"Reserviert",color:"#d97706",bg:"#fef3c7",icon:"🔒"},
-  "4":{label:"Aufbereitung",color:"#2563eb",bg:"#dbeafe",icon:"⏳"},
-  "5":{label:"Kaputt",color:"#dc2626",bg:"#fee2e2",icon:"🔧"},
-  "6":{label:"Kaputt",color:"#dc2626",bg:"#fee2e2",icon:"🔧"},
-};
+const STATUS={"0":{label:"Verfügbar",color:"#16a34a",bg:"#dcfce7",icon:"✅"},"3":{label:"Reserviert",color:"#d97706",bg:"#fef3c7",icon:"🔒"},"4":{label:"Aufbereitung",color:"#2563eb",bg:"#dbeafe",icon:"⏳"},"5":{label:"Kaputt",color:"#dc2626",bg:"#fee2e2",icon:"🔧"},"6":{label:"Kaputt",color:"#dc2626",bg:"#fee2e2",icon:"🔧"}};
 
-function parseA(code){
-  if(!code||code.length<4)return null;
-  const c=code.toUpperCase();
-  return{raw:c,cat:c[0],body:c[1],trans:c[2],fuel:c[3],
-    catLabel:CATS[c[0]]||c[0],bodyLabel:BODIES[c[1]]||c[1],
-    transLabel:TRANS[c[2]]||c[2],family:FAMILY[c[1]]||"?",
-    catIdx:CAT_ORDER.indexOf(c[0]),isAuto:c[2]==="A"||c[2]==="D"};
+function parseA(c){
+  if(!c||c.length<4)return null;
+  c=c.toUpperCase();
+  return{raw:c,cat:c[0],body:c[1],trans:c[2],catLabel:CATS[c[0]]||c[0],bodyLabel:BODIES[c[1]]||c[1],transLabel:TRANS[c[2]]||c[2],family:FAMILY[c[1]]||"?",catIdx:CAT_ORDER.indexOf(c[0]),isAuto:c[2]==="A"||c[2]==="D"};
 }
 
-function score(booked,avail){
-  const b=parseA(booked),a=parseA(avail);
-  if(!b||!a)return-999;
-  if(b.isAuto&&!a.isAuto)return-999;
-  if(a.catIdx<b.catIdx)return-999;
+function score(b,a){
+  const bp=parseA(b),ap=parseA(a);
+  if(!bp||!ap)return -999;
+  if(bp.isAuto&&!ap.isAuto)return -999;
+  if(ap.catIdx<bp.catIdx)return -999;
   let s=0;
-  if(a.raw===b.raw)s+=100;
-  if(a.family===b.family)s+=50;
-  if(a.cat===b.cat)s+=30;
-  if(!b.isAuto&&!a.isAuto)s+=40;
-  if(!b.isAuto&&a.isAuto)s+=5;
-  if(b.isAuto&&a.isAuto)s+=20;
-  s-=(a.catIdx-b.catIdx)*5;
+  if(ap.raw===bp.raw)s+=100;
+  if(ap.family===bp.family)s+=50;
+  if(ap.cat===bp.cat)s+=30;
+  if(!bp.isAuto&&!ap.isAuto)s+=40;
+  if(!bp.isAuto&&ap.isAuto)s+=5;
+  if(bp.isAuto&&ap.isAuto)s+=20;
+  s-=(ap.catIdx-bp.catIdx)*5;
   return s;
 }
 
@@ -82,511 +62,452 @@ function autoMatch(drops,resis){
   return resis.map(r=>{
     const cands=pool.filter(d=>!used.has(d.id)).map(d=>({d,s:score(r.acriss,d.acriss)})).filter(x=>x.s>-999).sort((a,b)=>b.s-a.s);
     if(!cands.length)return{r,d:null,type:"none"};
-    const best=cands[0];
-    used.add(best.d.id);
-    const type=parseA(r.acriss)?.raw===parseA(best.d.acriss)?.raw?"exact":"upgrade";
-    return{r,d:best.d,type};
+    used.add(cands[0].d.id);
+    const type=parseA(r.acriss)?.raw===parseA(cands[0].d.acriss)?.raw?"exact":"upgrade";
+    return{r,d:cands[0].d,type};
   });
 }
 
-// STATE
-let state={
+var state={
   tab:"plan",
   drops:[
     {id:1,time:"08:00",plate:"M-LC 4916",acriss:"GTAR",vehicle:"BMW Serie",lor:"3",status:"0"},
-    {id:2,time:"12:00",plate:"S-XY 1545",acriss:"LVAR",vehicle:"Nissan Primasta",lor:"2",status:"0"},
-    {id:3,time:"12:30",plate:"HH-AD 9310",acriss:"GDAR",vehicle:"Mercedes Benz",lor:"4",status:"0"},
-    {id:4,time:"13:00",plate:"M-ZB 3897",acriss:"UDAR",vehicle:"Audi A6 TDI",lor:"7",status:"0"},
-    {id:5,time:"15:00",plate:"M-KS 3374",acriss:"CTMR",vehicle:"VW T-Roc",lor:"3",status:"0"},
-    {id:6,time:"16:00",plate:"M-PL 6965",acriss:"DDAR",vehicle:"Audi A3",lor:"4",status:"0"},
-    {id:7,time:"17:00",plate:"M-KB 6229",acriss:"CDAR",vehicle:"Skoda SCALA",lor:"24",status:"0"},
-    {id:8,time:"17:30",plate:"M-HB 4799",acriss:"UFAR",vehicle:"BMW X3",lor:"4",status:"0"},
-    {id:9,time:"18:00",plate:"M-ZB 5530",acriss:"IFAR",vehicle:"Mazda CX-30",lor:"2",status:"3"},
-    {id:10,time:"18:00",plate:"M-PL 5908",acriss:"CWMR",vehicle:"VW Golf Kombi",lor:"4",status:"4"},
-    {id:11,time:"20:00",plate:"SI-QL 1766",acriss:"LVAR",vehicle:"Nissan Primasta",lor:"3",status:"0"},
-    {id:12,time:"20:00",plate:"M-KS 4357",acriss:"SFAR",vehicle:"VW Tiguan",lor:"3",status:"0"},
-    {id:13,time:"20:00",plate:"M-PL 3020",acriss:"EDMR",vehicle:"Opel Corsa",lor:"3",status:"0"},
-    {id:14,time:"22:00",plate:"M-KB 3420",acriss:"PVAR",vehicle:"Ford Tourneo",lor:"1",status:"3"},
-    {id:15,time:"23:30",plate:"M-LM 4803",acriss:"IFAO",vehicle:"Skoda Enyaq ⚡",lor:"3",status:"0"},
+    {id:2,time:"16:00",plate:"M-PL 6965",acriss:"DDAR",vehicle:"Audi A3",lor:"4",status:"0"},
+    {id:3,time:"17:00",plate:"M-KB 6229",acriss:"CDAR",vehicle:"Skoda SCALA",lor:"24",status:"0"},
+    {id:4,time:"17:30",plate:"M-HB 4799",acriss:"UFAR",vehicle:"BMW X3",lor:"4",status:"0"},
+    {id:5,time:"20:00",plate:"M-KS 4357",acriss:"SFAR",vehicle:"VW Tiguan",lor:"3",status:"0"},
   ],
   resis:[
     {id:1,time:"06:00",resi:"9732144425",acriss:"DDAR",returnDate:"10.06.",lor:"3"},
-    {id:2,time:"06:30",resi:"9734836627",acriss:"CDMR",returnDate:"18.06.",lor:"11"},
-    {id:3,time:"08:00",resi:"9734978885",acriss:"CDAR",returnDate:"11.06.",lor:"4"},
-    {id:4,time:"08:00",resi:"9734939793",acriss:"CDAR",returnDate:"08.06.",lor:"1"},
-    {id:5,time:"09:00",resi:"9732835662",acriss:"IDAR",returnDate:"11.06.",lor:"4"},
-    {id:6,time:"10:00",resi:"9734001248",acriss:"DDAR",returnDate:"12.06.",lor:"4"},
-    {id:7,time:"14:00",resi:"9734792271",acriss:"CDAR",returnDate:"13.06.",lor:"5"},
-    {id:8,time:"20:00",resi:"9734933427",acriss:"CDMR",returnDate:"09.06.",lor:"1"},
+    {id:2,time:"08:00",resi:"9734978885",acriss:"CDAR",returnDate:"11.06.",lor:"4"},
+    {id:3,time:"09:00",resi:"9732835662",acriss:"IDAR",returnDate:"11.06.",lor:"4"},
   ],
-  apiKey: localStorage.getItem("sixt_gemini_key")||"",
-  scanning: false,
-  scanResult: null,
-  newDrop:{time:"",plate:"",acriss:"",vehicle:"",lor:"",status:"0"},
-  newResi:{time:"",resi:"",acriss:"",returnDate:"",lor:""},
+  apiKey:localStorage.getItem("sixt_gemini_key")||"",
+  scanning:false,
   toast:"",
-  showApiSetup: !localStorage.getItem("sixt_gemini_key"),
+  nd:{time:"",plate:"",acriss:"",vehicle:"",lor:"",status:"0"},
+  nr:{time:"",resi:"",acriss:"",returnDate:"",lor:""}
 };
 
-function showToast(msg,dur=2500){
-  state.toast=msg;render();
-  setTimeout(()=>{state.toast="";render();},dur);
-}
-
-function el(tag,props,...children){
-  const e=document.createElement(tag);
-  if(props)Object.entries(props).forEach(([k,v])=>{
-    if(k==="style"&&typeof v==="object")Object.assign(e.style,v);
-    else if(k.startsWith("on"))e[k.toLowerCase()]=v;
-    else if(k==="class")e.className=v;
-    else e.setAttribute(k,v);
-  });
-  children.flat(Infinity).forEach(c=>{
-    if(c==null||c===false)return;
-    e.appendChild(typeof c==="string"||typeof c==="number"?document.createTextNode(String(c)):c);
-  });
-  return e;
-}
-
-function field(label,...children){
-  return el("div",{},
-    el("div",{style:{fontSize:10,color:"#888",marginBottom:4,textTransform:"uppercase",letterSpacing:0.5}},label),
-    ...children
-  );
-}
-
-function acrissTip(code){
-  const p=parseA(code);
-  return p?`${p.catLabel} · ${p.bodyLabel} · ${p.transLabel}`:"";
-}
-
-// ── SCAN FUNCTION ──────────────────────────────────
-async function scanPhoto(file){
-  if(!state.apiKey){
-    state.showApiSetup=true;
-    showToast("⚠️ Erst API Key eingeben!");
-    return;
-  }
-  state.scanning=true;
-  state.scanResult=null;
+var toastTimer=null;
+function showToast(msg,dur){
+  dur=dur||2500;
+  state.toast=msg;
   render();
+  if(toastTimer)clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){state.toast="";render();},dur);
+}
 
+async function scanPhoto(file){
+  if(!state.apiKey){showToast("⚠️ Erst API Key im Key-Tab eingeben!");return;}
+  state.scanning=true;render();
+  showToast("📸 Foto wird gelesen...",8000);
   try{
-    const base64=await new Promise((res,rej)=>{
-      const r=new FileReader();
-      r.onload=()=>res(r.result.split(",")[1]);
+    var base64=await new Promise(function(res,rej){
+      var r=new FileReader();
+      r.onload=function(){res(r.result.split(",")[1]);};
       r.onerror=rej;
       r.readAsDataURL(file);
     });
-
-    const prompt=`Du bist ein Experte für Sixt Lynx Fleet Monitor Daten.
-
-Analysiere diesen Screenshot aus dem Sixt Lynx System (lynx.orange.sixt.com).
-
-Erkenne ob es ein "Drops" Screen (Rückgaben) oder "Reservations" Screen ist.
-
-Extrahiere ALLE sichtbaren Zeilen und gib NUR valides JSON zurück:
-
-Für DROPS:
-{
-  "type": "drops",
-  "data": [
-    {"time": "08:00", "plate": "M-XX 1234", "acriss": "CDAR", "vehicle": "VW Golf", "lor": "3", "status": "0"}
-  ]
-}
-
-Für RESERVATIONS:
-{
-  "type": "resis", 
-  "data": [
-    {"time": "06:00", "resi": "9734xxxxxx", "acriss": "CDAR", "returnDate": "10.06.", "lor": "3"}
-  ]
-}
-
-Status Codes: 0=normal/vermietet, 3=reserviert für Person, 4=Aufbereitung, 5=kaputt, 6=kaputt
-Vehicle group Spalte = ACRISS Code
-Return date time / Pickup date time = nur Uhrzeit extrahieren (HH:MM)
-LOR = Zahl als String
-
-Nur JSON zurückgeben, kein Text davor oder danach.`;
-
-    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${state.apiKey}`,{
+    showToast("🤖 KI analysiert...",8000);
+    var prompt='Analysiere diesen Sixt Lynx Fleet Monitor Screenshot.\nErkenne ob es Drops (Rückgaben) oder Reservations ist.\nGib NUR JSON zurück:\nFür DROPS: {"type":"drops","data":[{"time":"08:00","plate":"M-XX 1234","acriss":"CDAR","vehicle":"VW Golf","lor":"3","status":"0"}]}\nFür RESERVATIONS: {"type":"resis","data":[{"time":"06:00","resi":"9734xxxxxx","acriss":"CDAR","returnDate":"10.06.","lor":"3"}]}\nNur JSON, kein Text!';
+    var res=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key="+state.apiKey,{
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({
-        contents:[{
-          parts:[
-            {inlineData:{mimeType:file.type||"image/jpeg",data:base64}},
-            {text:prompt}
-          ]
-        }]
-      })
+      body:JSON.stringify({contents:[{parts:[{inlineData:{mimeType:file.type||"image/jpeg",data:base64}},{text:prompt}]}]})
     });
-
-    const data=await res.json();
-    if(!res.ok)throw new Error(data.error?.message||data.error?.status||"API Fehler: "+res.status);
-    if(!data.candidates||!data.candidates[0])throw new Error("Keine Antwort von KI: "+JSON.stringify(data).slice(0,100));
-
-    const text=data.candidates[0].content.parts[0].text.replace(/```json|```/g,"").trim();
-    const parsed=JSON.parse(text);
-
-    state.scanResult=parsed;
+    var data=await res.json();
+    if(!res.ok)throw new Error((data.error&&data.error.message)||"API Fehler "+res.status);
+    if(!data.candidates||!data.candidates[0])throw new Error("Keine KI Antwort");
+    var text=data.candidates[0].content.parts[0].text.replace(/```json|```/g,"").trim();
+    var parsed=JSON.parse(text);
     state.scanning=false;
-
-    // Auto-import
-    if(parsed.type==="drops"&&parsed.data?.length){
-      const newItems=parsed.data.map(d=>({...d,id:Date.now()+Math.random()}));
-      state.drops=[...state.drops,...newItems];
+    if(parsed.type==="drops"&&parsed.data&&parsed.data.length){
+      parsed.data.forEach(function(d){state.drops.push(Object.assign({},d,{id:Date.now()+Math.random()}));});
       state.tab="drops";
-      showToast(`✅ ${newItems.length} Drops importiert!`);
-    } else if(parsed.type==="resis"&&parsed.data?.length){
-      const newItems=parsed.data.map(d=>({...d,id:Date.now()+Math.random()}));
-      state.resis=[...state.resis,...newItems];
+      showToast("✅ "+parsed.data.length+" Drops importiert!");
+    }else if(parsed.type==="resis"&&parsed.data&&parsed.data.length){
+      parsed.data.forEach(function(d){state.resis.push(Object.assign({},d,{id:Date.now()+Math.random()}));});
       state.tab="resis";
-      showToast(`✅ ${newItems.length} Reservierungen importiert!`);
-    } else {
-      showToast("⚠️ Keine Daten erkannt");
+      showToast("✅ "+parsed.data.length+" Reservierungen importiert!");
+    }else{
+      showToast("⚠️ Keine Daten erkannt – nochmal versuchen");
     }
     render();
   }catch(e){
     state.scanning=false;
-    showToast("❌ Fehler: "+e.message,4000);
+    showToast("❌ Fehler: "+e.message,5000);
     render();
   }
 }
 
-// Photo input handler
-document.getElementById("photoInput").addEventListener("change",function(e){
-  const file=e.target.files[0];
-  if(file)scanPhoto(file);
-  this.value="";
-});
-
-// ── RENDER FUNCTIONS ────────────────────────────────
-
-function renderHeader(){
-  const tabs=[{k:"plan",icon:"📋",label:"Plan"},{k:"drops",icon:"📥",label:"Drops"},{k:"resis",icon:"📅",label:"Resis"},{k:"settings",icon:"⚙️",label:"Key"}];
-  return el("div",{style:{background:"linear-gradient(135deg,#FF6600,#cc4400)",padding:"14px 16px",display:"flex",alignItems:"center",gap:12,position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 16px #FF660044"}},
-    el("div",{style:{fontSize:24}},"🚗"),
-    el("div",{style:{flex:1}},
-      el("div",{style:{fontSize:15,fontWeight:700}},"Fleet Plan"),
-      el("div",{style:{fontSize:10,opacity:0.8,fontFamily:"monospace"}},"Sixt Harburg · 46790")
-    ),
-    el("div",{style:{display:"flex",gap:3,background:"rgba(0,0,0,0.2)",borderRadius:8,padding:3}},
-      ...tabs.map(t=>el("button",{
-        style:{background:state.tab===t.k?"#fff":"transparent",color:state.tab===t.k?"#FF6600":"#fff",border:"none",borderRadius:6,padding:"5px 7px",fontSize:10,fontWeight:state.tab===t.k?700:400,cursor:"pointer"},
-        onClick:()=>{state.tab=t.k;render()}
-      },t.icon," ",t.label))
-    )
-  );
+function h(tag,attrs,children){
+  var el=document.createElement(tag);
+  if(attrs){
+    Object.keys(attrs).forEach(function(k){
+      if(k==="style"){Object.assign(el.style,attrs[k]);}
+      else if(k==="class"){el.className=attrs[k];}
+      else if(k==="html"){el.innerHTML=attrs[k];}
+      else if(typeof attrs[k]==="function"){el.addEventListener(k.replace(/^on/,"").toLowerCase(),attrs[k]);}
+      else{el.setAttribute(k,attrs[k]);}
+    });
+  }
+  if(children){
+    if(!Array.isArray(children))children=[children];
+    children.forEach(function(c){
+      if(c==null||c===false||c===undefined)return;
+      if(typeof c==="string"||typeof c==="number"){el.appendChild(document.createTextNode(String(c)));}
+      else if(c.nodeType){el.appendChild(c);}
+    });
+  }
+  return el;
 }
 
-function renderScanButton(){
-  return el("div",{style:{marginBottom:16}},
-    state.scanning
-      ? el("div",{style:{background:"linear-gradient(135deg,#7c3aed,#4f46e5)",borderRadius:10,padding:"13px",display:"flex",alignItems:"center",justifyContent:"center",gap:10}},
-          el("div",{class:"spinner"}),
-          el("span",{style:{color:"#fff",fontWeight:700,fontSize:15}},"KI analysiert Foto...")
-        )
-      : el("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}},
-          el("button",{
-            class:"btn-scan",
-            onClick:()=>document.getElementById("photoInput").click()
-          },
-            el("span",{style:{fontSize:18}},"📸"),
-            el("span",{style:{fontSize:13}},"Kamera")
-          ),
-          el("button",{
-            style:{background:"linear-gradient(135deg,#0d9488,#0f766e)",color:"#fff",border:"none",borderRadius:10,padding:"13px",width:"100%",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6},
-            onClick:()=>document.getElementById("galleryInput").click()
-          },
-            el("span",{style:{fontSize:18}},"🖼️"),
-            el("span",{},"Galerie")
-          )
-        ),
-    !state.apiKey && el("div",{style:{fontSize:11,color:"#f87171",textAlign:"center",marginTop:6}},"⚠️ API Key fehlt → Tab '⚙️ Key' öffnen")
-  );
-}
+function t(text){return document.createTextNode(String(text||""));}
 
-function renderKPIs(matches){
-  const stats={total:matches.length,exact:matches.filter(m=>m.type==="exact").length,upgrade:matches.filter(m=>m.type==="upgrade").length,none:matches.filter(m=>m.type==="none").length};
-  return el("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:16}},
-    ...[
-      {label:"Total",val:stats.total,color:"#818cf8",icon:"📊"},
-      {label:"Exakt",val:stats.exact,color:"#4ade80",icon:"✅"},
-      {label:"Upgrade",val:stats.upgrade,color:"#facc15",icon:"⬆️"},
-      {label:"Fehlt",val:stats.none,color:"#f87171",icon:"🚨"},
-    ].map(k=>el("div",{style:{background:"#131325",border:`1px solid ${k.color}33`,borderRadius:10,padding:"10px 4px",textAlign:"center"}},
-      el("div",{style:{fontSize:14}},k.icon),
-      el("div",{style:{fontSize:20,fontWeight:700,color:k.color,fontFamily:"monospace"}},k.val),
-      el("div",{style:{fontSize:9,color:"#666",textTransform:"uppercase"}},k.label)
-    ))
-  );
+function renderScanButtons(){
+  var wrap=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"16px"}});
+  if(state.scanning){
+    var spinner=h("div",{style:{gridColumn:"span 2",background:"linear-gradient(135deg,#7c3aed,#4f46e5)",borderRadius:"10px",padding:"13px",display:"flex",alignItems:"center",justifyContent:"center",gap:"10px",color:"#fff",fontWeight:"700"}});
+    spinner.innerHTML='<div style="width:18px;height:18px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite"></div> KI analysiert...';
+    wrap.appendChild(spinner);
+  }else{
+    var lbl1=document.createElement("label");
+    lbl1.className="scan-label";
+    lbl1.style.background="linear-gradient(135deg,#7c3aed,#4f46e5)";
+    lbl1.innerHTML='<span style="font-size:18px">📸</span><span>Kamera</span>';
+    var inp1=document.createElement("input");
+    inp1.type="file";inp1.accept="image/*";inp1.setAttribute("capture","environment");
+    inp1.addEventListener("change",function(){if(this.files&&this.files[0])scanPhoto(this.files[0]);});
+    lbl1.appendChild(inp1);
+    wrap.appendChild(lbl1);
+
+    var lbl2=document.createElement("label");
+    lbl2.className="scan-label";
+    lbl2.style.background="linear-gradient(135deg,#0d9488,#0f766e)";
+    lbl2.innerHTML='<span style="font-size:18px">🖼️</span><span>Galerie</span>';
+    var inp2=document.createElement("input");
+    inp2.type="file";inp2.accept="image/*";
+    inp2.addEventListener("change",function(){if(this.files&&this.files[0])scanPhoto(this.files[0]);});
+    lbl2.appendChild(inp2);
+    wrap.appendChild(lbl2);
+  }
+  if(!state.apiKey){
+    wrap.appendChild(h("div",{style:{gridColumn:"span 2",fontSize:"11px",color:"#f87171",textAlign:"center",marginTop:"4px"}},"⚠️ API Key fehlt → Tab Key öffnen"));
+  }
+  return wrap;
 }
 
 function renderPlan(){
-  const matches=autoMatch(state.drops,state.resis);
-  return el("div",{},
-    renderScanButton(),
-    renderKPIs(matches),
-    ...matches.map(m=>{
-      const ba=parseA(m.r.acriss),da=m.d?parseA(m.d.acriss):null;
-      const sc=m.type==="exact"?{label:"✅ Exakt",bg:"#dcfce7",bdr:"#16a34a",txt:"#15803d"}
-               :m.type==="upgrade"?{label:"⬆️ Upgrade",bg:"#fef9c3",bdr:"#ca8a04",txt:"#78350f"}
-               :{label:"🚨 Kein Auto",bg:"#fee2e2",bdr:"#dc2626",txt:"#991b1b"};
-      const manualExact=m.d&&ba&&da&&!ba.isAuto&&!da.isAuto;
-      const manualFallback=m.d&&ba&&da&&!ba.isAuto&&da.isAuto;
-      return el("div",{class:"card",style:{borderLeft:`3px solid ${sc.bdr}`}},
-        el("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:10}},
-          el("div",{style:{background:"#0d0d1a",borderRadius:7,padding:"5px 9px",fontFamily:"monospace",fontSize:14,fontWeight:700,color:O}},m.r.time),
-          el("div",{style:{flex:1,fontSize:10,color:"#666",fontFamily:"monospace"}},m.r.resi||""),
-          el("span",{style:{background:sc.bg,color:sc.txt,border:`1px solid ${sc.bdr}`,borderRadius:20,padding:"3px 8px",fontSize:10,fontWeight:700}},sc.label)
-        ),
-        el("div",{style:{display:"grid",gridTemplateColumns:"1fr 20px 1fr",gap:6,alignItems:"center"}},
-          el("div",{style:{background:"#0d0d1a",borderRadius:8,padding:"10px"}},
-            el("div",{style:{fontSize:9,color:"#555",textTransform:"uppercase",marginBottom:3}},"Gebucht"),
-            el("div",{style:{fontFamily:"monospace",fontSize:17,fontWeight:700,color:"#818cf8"}},m.r.acriss),
-            el("div",{style:{fontSize:10,color:"#888"}},ba?ba.catLabel:"–"),
-            el("div",{style:{fontSize:9,color:"#666"}},ba?`${ba.bodyLabel} · ${ba.transLabel}`:"–")
-          ),
-          el("div",{style:{textAlign:"center",color:"#333",fontSize:16}},"→"),
-          el("div",{style:{background:"#0d0d1a",borderRadius:8,padding:"10px"}},
-            el("div",{style:{fontSize:9,color:"#555",textTransform:"uppercase",marginBottom:3}},"Zugeteilt"),
-            m.d
-              ?[el("div",{style:{fontFamily:"monospace",fontSize:17,fontWeight:700,color:"#fff"}},m.d.acriss),
-                el("div",{style:{fontSize:10,color:"#ccc"}},m.d.vehicle),
-                el("div",{style:{fontSize:9,color:"#666",fontFamily:"monospace"}},m.d.plate),
-                m.d.status==="4"?el("div",{style:{fontSize:9,color:"#60a5fa",marginTop:2}},"⏳ Aufbereitung prüfen!"):null]
-              :el("div",{style:{color:"#f87171",fontWeight:700,fontSize:12,paddingTop:4}},"Kein Auto!")
-          )
-        ),
-        manualExact?el("div",{style:{marginTop:8,fontSize:11,color:"#4ade80",background:"#052e16",borderRadius:6,padding:"4px 8px",display:"inline-block"}},"✅ Manual → Manual"):null,
-        manualFallback?el("div",{style:{marginTop:8,fontSize:11,color:"#60a5fa",background:"#0c1a2e",borderRadius:6,padding:"4px 8px",display:"inline-block"}},"⬆️ Manual → Automatik (Fallback)"):null,
-        m.type==="none"?el("div",{style:{marginTop:8,fontSize:11,color:"#fca5a5",background:"#450a0a",borderRadius:6,padding:"5px 8px"}},"🚨 Nachbarstation kontaktieren!"):null,
-        el("div",{style:{marginTop:8,fontSize:10,color:"#555"}},
-          "LOR ",el("span",{style:{color:"#818cf8",fontFamily:"monospace",fontWeight:700}},m.r.lor+"T"),
-          " · bis ",m.r.returnDate||"–"
-        )
-      );
-    }),
-    el("div",{style:{background:"#1a0a00",border:"1px solid #FF660044",borderRadius:12,padding:"12px",marginTop:4}},
-      el("div",{style:{fontWeight:700,color:O,marginBottom:8,fontSize:12}},"🚨 Regeln"),
-      ...[
-        "Manual + Manual verfügbar → Manual geben ✅",
-        "Manual + kein Manual → Automatik als Fallback ⬆️",
-        "Automatik → NUR Automatik, niemals Manual ❌",
-        "Kein Downgrade in der Kategorie ❌",
-        "Status 3 = nicht anfassen 🔒",
-        "Status 4 = Aufbereitung prüfen ⏳",
-        "Status 5/6 = kaputt 🔧",
-      ].map(r=>el("div",{style:{fontSize:11,color:"#ccc",padding:"3px 0",borderBottom:"1px solid #2a1500"}},r))
-    )
-  );
+  var matches=autoMatch(state.drops,state.resis);
+  var exact=matches.filter(function(m){return m.type==="exact";}).length;
+  var upgrade=matches.filter(function(m){return m.type==="upgrade";}).length;
+  var none=matches.filter(function(m){return m.type==="none";}).length;
+  var wrap=document.createDocumentFragment();
+  wrap.appendChild(renderScanButtons());
+
+  // KPIs
+  var kpis=h("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"8px",marginBottom:"16px"}});
+  [{l:"Total",v:matches.length,c:"#818cf8",i:"📊"},{l:"Exakt",v:exact,c:"#4ade80",i:"✅"},{l:"Upgrade",v:upgrade,c:"#facc15",i:"⬆️"},{l:"Fehlt",v:none,c:"#f87171",i:"🚨"}].forEach(function(k){
+    var kd=h("div",{style:{background:"#131325",border:"1px solid "+k.c+"33",borderRadius:"10px",padding:"10px 4px",textAlign:"center"}});
+    kd.appendChild(h("div",{style:{fontSize:"14px"}},k.i));
+    kd.appendChild(h("div",{style:{fontSize:"20px",fontWeight:"700",color:k.c,fontFamily:"monospace"}},k.v));
+    kd.appendChild(h("div",{style:{fontSize:"9px",color:"#666",textTransform:"uppercase"}},k.l));
+    kpis.appendChild(kd);
+  });
+  wrap.appendChild(kpis);
+
+  matches.forEach(function(m){
+    var ba=parseA(m.r.acriss),da=m.d?parseA(m.d.acriss):null;
+    var sc=m.type==="exact"?{lbl:"✅ Exakt",bg:"#dcfce7",bdr:"#16a34a",txt:"#15803d"}:m.type==="upgrade"?{lbl:"⬆️ Upgrade",bg:"#fef9c3",bdr:"#ca8a04",txt:"#78350f"}:{lbl:"🚨 Kein Auto",bg:"#fee2e2",bdr:"#dc2626",txt:"#991b1b"};
+    var card=h("div",{class:"card",style:{borderLeft:"3px solid "+sc.bdr,marginBottom:"10px"}});
+    var top=h("div",{style:{display:"flex",alignItems:"center",gap:"8px",marginBottom:"10px"}});
+    top.appendChild(h("div",{style:{background:"#0d0d1a",borderRadius:"7px",padding:"5px 9px",fontFamily:"monospace",fontSize:"14px",fontWeight:"700",color:O}},m.r.time));
+    top.appendChild(h("div",{style:{flex:"1",fontSize:"10px",color:"#666",fontFamily:"monospace"}},m.r.resi||""));
+    var badge=h("span",{style:{background:sc.bg,color:sc.txt,border:"1px solid "+sc.bdr,borderRadius:"20px",padding:"3px 8px",fontSize:"10px",fontWeight:"700"}},sc.lbl);
+    top.appendChild(badge);
+    card.appendChild(top);
+
+    var grid=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 20px 1fr",gap:"6px",alignItems:"center"}});
+    var left=h("div",{style:{background:"#0d0d1a",borderRadius:"8px",padding:"10px"}});
+    left.appendChild(h("div",{style:{fontSize:"9px",color:"#555",textTransform:"uppercase",marginBottom:"3px"}},"Gebucht"));
+    left.appendChild(h("div",{style:{fontFamily:"monospace",fontSize:"17px",fontWeight:"700",color:"#818cf8"}},m.r.acriss));
+    left.appendChild(h("div",{style:{fontSize:"10px",color:"#888"}},ba?ba.catLabel:"–"));
+    left.appendChild(h("div",{style:{fontSize:"9px",color:"#666"}},ba?ba.bodyLabel+" · "+ba.transLabel:"–"));
+    grid.appendChild(left);
+    grid.appendChild(h("div",{style:{textAlign:"center",color:"#333",fontSize:"16px"}},"→"));
+    var right=h("div",{style:{background:"#0d0d1a",borderRadius:"8px",padding:"10px"}});
+    right.appendChild(h("div",{style:{fontSize:"9px",color:"#555",textTransform:"uppercase",marginBottom:"3px"}},"Zugeteilt"));
+    if(m.d){
+      right.appendChild(h("div",{style:{fontFamily:"monospace",fontSize:"17px",fontWeight:"700",color:"#fff"}},m.d.acriss));
+      right.appendChild(h("div",{style:{fontSize:"10px",color:"#ccc"}},m.d.vehicle));
+      right.appendChild(h("div",{style:{fontSize:"9px",color:"#666",fontFamily:"monospace"}},m.d.plate));
+    }else{
+      right.appendChild(h("div",{style:{color:"#f87171",fontWeight:"700",fontSize:"12px",paddingTop:"4px"}},"Kein Auto!"));
+    }
+    grid.appendChild(right);
+    card.appendChild(grid);
+    if(m.d&&ba&&da&&!ba.isAuto&&!da.isAuto)card.appendChild(h("div",{style:{marginTop:"8px",fontSize:"11px",color:"#4ade80",background:"#052e16",borderRadius:"6px",padding:"4px 8px",display:"inline-block"}},"✅ Manual → Manual"));
+    if(m.d&&ba&&da&&!ba.isAuto&&da.isAuto)card.appendChild(h("div",{style:{marginTop:"8px",fontSize:"11px",color:"#60a5fa",background:"#0c1a2e",borderRadius:"6px",padding:"4px 8px",display:"inline-block"}},"⬆️ Manual → Auto Fallback"));
+    if(m.type==="none")card.appendChild(h("div",{style:{marginTop:"8px",fontSize:"11px",color:"#fca5a5",background:"#450a0a",borderRadius:"6px",padding:"5px 8px"}},"🚨 Nachbarstation kontaktieren!"));
+    card.appendChild(h("div",{style:{marginTop:"8px",fontSize:"10px",color:"#555"}},"LOR "+m.r.lor+"T · bis "+(m.r.returnDate||"–")));
+    wrap.appendChild(card);
+  });
+
+  var rules=h("div",{style:{background:"#1a0a00",border:"1px solid #FF660044",borderRadius:"12px",padding:"12px"}});
+  rules.appendChild(h("div",{style:{fontWeight:"700",color:O,marginBottom:"8px",fontSize:"12px"}},"🚨 Regeln"));
+  ["Manual + Manual → Manual geben ✅","Manual + kein Manual → Auto Fallback ⬆️","Automatik → NUR Automatik ❌","Kein Downgrade ❌","Status 3 = nicht anfassen 🔒","Status 4 = Aufbereitung ⏳","Status 5/6 = kaputt 🔧"].forEach(function(r){
+    rules.appendChild(h("div",{style:{fontSize:"11px",color:"#ccc",padding:"3px 0",borderBottom:"1px solid #2a1500"}},r));
+  });
+  wrap.appendChild(rules);
+  return wrap;
 }
 
 function renderDrops(){
-  const nd=state.newDrop;
-  return el("div",{},
-    renderScanButton(),
-    el("div",{class:"card",style:{border:"1px solid #2a2a45"}},
-      el("div",{style:{fontSize:12,fontWeight:700,color:O,marginBottom:10}},"+ Drop manuell hinzufügen"),
-      el("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}},
-        field("Uhrzeit",el("input",{class:"inp",type:"time",value:nd.time,onInput:e=>{state.newDrop.time=e.target.value}})),
-        field("Kennzeichen",el("input",{class:"inp",placeholder:"M-XX 1234",value:nd.plate,onInput:e=>{state.newDrop.plate=e.target.value.toUpperCase()}})),
-        field("ACRISS",el("div",{},
-          el("input",{class:"inp",placeholder:"CDAR",maxLength:4,value:nd.acriss,
-            style:{textTransform:"uppercase",fontFamily:"monospace",letterSpacing:2,color:nd.acriss.length===4?"#4ade80":"#fff"},
-            onInput:e=>{state.newDrop.acriss=e.target.value.toUpperCase().slice(0,4);render()}}),
-          nd.acriss.length===4?el("div",{style:{fontSize:9,color:"#4ade80",marginTop:2}},acrissTip(nd.acriss)):null
-        )),
-        field("Fahrzeug",el("input",{class:"inp",placeholder:"VW Golf",value:nd.vehicle,onInput:e=>{state.newDrop.vehicle=e.target.value}})),
-        field("LOR (Tage)",el("input",{class:"inp",type:"number",placeholder:"3",value:nd.lor,onInput:e=>{state.newDrop.lor=e.target.value}})),
-        field("Status",el("select",{class:"inp",value:nd.status,onChange:e=>{state.newDrop.status=e.target.value}},
-          el("option",{value:"0"},"0 – Verfügbar"),
-          el("option",{value:"3"},"3 – Reserviert"),
-          el("option",{value:"4"},"4 – Aufbereitung"),
-          el("option",{value:"5"},"5 – Kaputt"),
-        ))
-      ),
-      el("button",{class:"btn",onClick:()=>{
-        if(!nd.acriss||!nd.plate){showToast("⚠️ ACRISS + Kennzeichen nötig");return}
-        state.drops.push({...nd,id:Date.now()});
-        state.newDrop={time:"",plate:"",acriss:"",vehicle:"",lor:"",status:"0"};
-        showToast("✅ Drop hinzugefügt");render();
-      }},"+ Hinzufügen")
-    ),
-    el("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}},
-      el("div",{style:{fontSize:12,fontWeight:700,color:"#888"}},"Drops ("+state.drops.length+")"),
-      el("button",{style:{background:"#2a1515",border:"1px solid #dc2626",color:"#f87171",borderRadius:6,padding:"4px 10px",fontSize:11,cursor:"pointer"},
-        onClick:()=>{if(confirm("Alle Drops löschen?"))state.drops=[];render()}},"Alle löschen")
-    ),
-    ...state.drops.map(d=>{
-      const s=STATUS[d.status]||STATUS["0"];
-      const p=parseA(d.acriss);
-      return el("div",{class:"card"},
-        el("div",{style:{display:"flex",alignItems:"center",gap:8}},
-          el("div",{style:{fontFamily:"monospace",fontSize:13,fontWeight:700,color:O,minWidth:48}},d.time||"–"),
-          el("div",{style:{flex:1}},
-            el("div",{style:{fontFamily:"monospace",fontSize:15,fontWeight:700,color:"#818cf8"}},d.acriss),
-            el("div",{style:{fontSize:12,color:"#ccc"}},d.vehicle),
-            el("div",{style:{fontSize:10,color:"#666",fontFamily:"monospace"}},d.plate," · LOR ",d.lor)
-          ),
-          el("div",{style:{textAlign:"right"}},
-            el("div",{style:{background:s.bg,color:s.color,border:`1px solid ${s.color}`,borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700,marginBottom:4}},s.icon," ",s.label),
-            el("button",{class:"del",onClick:()=>{state.drops=state.drops.filter(x=>x.id!==d.id);showToast("🗑 Gelöscht");render()}},"×")
-          )
-        ),
-        p?el("div",{style:{marginTop:4,fontSize:10,color:"#555"}},p.catLabel," · ",p.bodyLabel," · ",p.transLabel):null
-      );
-    })
-  );
+  var wrap=document.createDocumentFragment();
+  wrap.appendChild(renderScanButtons());
+  var nd=state.nd;
+  var form=h("div",{class:"card",style:{border:"1px solid #2a2a45"}});
+  form.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:O,marginBottom:"10px"}},"+ Drop manuell hinzufügen"));
+  var grid=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"10px"}});
+
+  function inp(lbl,type,placeholder,val,onchange){
+    var d=h("div",{});
+    d.appendChild(h("div",{style:{fontSize:"10px",color:"#888",marginBottom:"4px",textTransform:"uppercase"}},lbl));
+    var i=h("input",{class:"inp",type:type,placeholder:placeholder,value:val||""});
+    i.addEventListener("input",onchange);
+    d.appendChild(i);return d;
+  }
+
+  grid.appendChild(inp("Uhrzeit","time","",nd.time,function(e){state.nd.time=e.target.value;}));
+  grid.appendChild(inp("Kennzeichen","text","M-XX 1234",nd.plate,function(e){state.nd.plate=e.target.value.toUpperCase();}));
+
+  var acDiv=h("div",{});
+  acDiv.appendChild(h("div",{style:{fontSize:"10px",color:"#888",marginBottom:"4px",textTransform:"uppercase"}},"ACRISS"));
+  var acInp=h("input",{class:"inp",placeholder:"CDAR",maxlength:"4",value:nd.acriss||"",style:{textTransform:"uppercase",fontFamily:"monospace",letterSpacing:"2px",color:nd.acriss&&nd.acriss.length===4?"#4ade80":"#fff"}});
+  acInp.addEventListener("input",function(e){state.nd.acriss=e.target.value.toUpperCase().slice(0,4);render();});
+  acDiv.appendChild(acInp);
+  if(nd.acriss&&nd.acriss.length===4){var p=parseA(nd.acriss);if(p)acDiv.appendChild(h("div",{style:{fontSize:"9px",color:"#4ade80",marginTop:"2px"}},p.catLabel+" · "+p.bodyLabel+" · "+p.transLabel));}
+  grid.appendChild(acDiv);
+
+  grid.appendChild(inp("Fahrzeug","text","VW Golf",nd.vehicle,function(e){state.nd.vehicle=e.target.value;}));
+  grid.appendChild(inp("LOR","number","3",nd.lor,function(e){state.nd.lor=e.target.value;}));
+
+  var stDiv=h("div",{});
+  stDiv.appendChild(h("div",{style:{fontSize:"10px",color:"#888",marginBottom:"4px",textTransform:"uppercase"}},"Status"));
+  var sel=h("select",{class:"inp"});
+  [["0","0 – Verfügbar"],["3","3 – Reserviert"],["4","4 – Aufbereitung"],["5","5 – Kaputt"]].forEach(function(o){
+    var opt=h("option",{value:o[0]},o[1]);
+    if(nd.status===o[0])opt.setAttribute("selected","selected");
+    sel.appendChild(opt);
+  });
+  sel.addEventListener("change",function(e){state.nd.status=e.target.value;});
+  stDiv.appendChild(sel);grid.appendChild(stDiv);
+  form.appendChild(grid);
+
+  var addBtn=h("button",{class:"btn"},"+ Hinzufügen");
+  addBtn.addEventListener("click",function(){
+    if(!state.nd.acriss||!state.nd.plate){showToast("⚠️ ACRISS + Kennzeichen nötig");return;}
+    state.drops.push(Object.assign({},state.nd,{id:Date.now()}));
+    state.nd={time:"",plate:"",acriss:"",vehicle:"",lor:"",status:"0"};
+    showToast("✅ Drop hinzugefügt");render();
+  });
+  form.appendChild(addBtn);
+  wrap.appendChild(form);
+
+  var hdr=h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}});
+  hdr.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:"#888"}},"Drops ("+state.drops.length+")"));
+  var clrBtn=h("button",{style:{background:"#2a1515",border:"1px solid #dc2626",color:"#f87171",borderRadius:"6px",padding:"4px 10px",fontSize:"11px",cursor:"pointer"}},"Alle löschen");
+  clrBtn.addEventListener("click",function(){if(confirm("Alle Drops löschen?")){state.drops=[];render();}});
+  hdr.appendChild(clrBtn);wrap.appendChild(hdr);
+
+  state.drops.forEach(function(d){
+    var s=STATUS[d.status]||STATUS["0"];var p=parseA(d.acriss);
+    var card=h("div",{class:"card"});
+    var row=h("div",{style:{display:"flex",alignItems:"center",gap:"8px"}});
+    row.appendChild(h("div",{style:{fontFamily:"monospace",fontSize:"13px",fontWeight:"700",color:O,minWidth:"48px"}},d.time||"–"));
+    var info=h("div",{style:{flex:"1"}});
+    info.appendChild(h("div",{style:{fontFamily:"monospace",fontSize:"15px",fontWeight:"700",color:"#818cf8"}},d.acriss));
+    info.appendChild(h("div",{style:{fontSize:"12px",color:"#ccc"}},d.vehicle));
+    info.appendChild(h("div",{style:{fontSize:"10px",color:"#666",fontFamily:"monospace"}},d.plate+" · LOR "+d.lor));
+    row.appendChild(info);
+    var right=h("div",{style:{textAlign:"right"}});
+    var badge=h("div",{style:{background:s.bg,color:s.color,border:"1px solid "+s.color,borderRadius:"20px",padding:"2px 8px",fontSize:"10px",fontWeight:"700",marginBottom:"4px"}},s.icon+" "+s.label);
+    right.appendChild(badge);
+    var del=h("button",{class:"del"},"×");
+    var did=d.id;
+    del.addEventListener("click",function(){state.drops=state.drops.filter(function(x){return x.id!==did;});showToast("🗑 Gelöscht");render();});
+    right.appendChild(del);row.appendChild(right);card.appendChild(row);
+    if(p)card.appendChild(h("div",{style:{marginTop:"4px",fontSize:"10px",color:"#555"}},p.catLabel+" · "+p.bodyLabel+" · "+p.transLabel));
+    wrap.appendChild(card);
+  });
+  return wrap;
 }
 
 function renderResis(){
-  const nr=state.newResi;
-  return el("div",{},
-    renderScanButton(),
-    el("div",{class:"card",style:{border:"1px solid #2a2a45"}},
-      el("div",{style:{fontSize:12,fontWeight:700,color:O,marginBottom:10}},"+ Reservierung manuell hinzufügen"),
-      el("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}},
-        field("Pickup Zeit",el("input",{class:"inp",type:"time",value:nr.time,onInput:e=>{state.newResi.time=e.target.value}})),
-        field("Resi-Nr.",el("input",{class:"inp",placeholder:"9734xxxxxx",value:nr.resi,onInput:e=>{state.newResi.resi=e.target.value}})),
-        field("ACRISS",el("div",{},
-          el("input",{class:"inp",placeholder:"CDAR",maxLength:4,value:nr.acriss,
-            style:{textTransform:"uppercase",fontFamily:"monospace",letterSpacing:2,color:nr.acriss.length===4?"#4ade80":"#fff"},
-            onInput:e=>{state.newResi.acriss=e.target.value.toUpperCase().slice(0,4);render()}}),
-          nr.acriss.length===4?el("div",{style:{fontSize:9,color:"#4ade80",marginTop:2}},acrissTip(nr.acriss)):null
-        )),
-        field("Rückgabe",el("input",{class:"inp",placeholder:"12.06.",value:nr.returnDate,onInput:e=>{state.newResi.returnDate=e.target.value}})),
-        el("div",{style:{gridColumn:"span 2"}},
-          el("div",{style:{fontSize:10,color:"#888",marginBottom:4,textTransform:"uppercase"}},"LOR (Tage)"),
-          el("input",{class:"inp",type:"number",placeholder:"4",value:nr.lor,onInput:e=>{state.newResi.lor=e.target.value}})
-        )
-      ),
-      el("button",{class:"btn",onClick:()=>{
-        if(!nr.acriss||!nr.resi){showToast("⚠️ ACRISS + Resi-Nr. nötig");return}
-        state.resis.push({...nr,id:Date.now()});
-        state.newResi={time:"",resi:"",acriss:"",returnDate:"",lor:""};
-        showToast("✅ Reservierung hinzugefügt");render();
-      }},"+ Hinzufügen")
-    ),
-    el("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}},
-      el("div",{style:{fontSize:12,fontWeight:700,color:"#888"}},"Reservierungen ("+state.resis.length+")"),
-      el("button",{style:{background:"#2a1515",border:"1px solid #dc2626",color:"#f87171",borderRadius:6,padding:"4px 10px",fontSize:11,cursor:"pointer"},
-        onClick:()=>{if(confirm("Alle Reservierungen löschen?"))state.resis=[];render()}},"Alle löschen")
-    ),
-    ...state.resis.map(r=>{
-      const p=parseA(r.acriss);
-      return el("div",{class:"card"},
-        el("div",{style:{display:"flex",alignItems:"center",gap:8}},
-          el("div",{style:{fontFamily:"monospace",fontSize:13,fontWeight:700,color:O,minWidth:48}},r.time||"–"),
-          el("div",{style:{flex:1}},
-            el("div",{style:{fontFamily:"monospace",fontSize:15,fontWeight:700,color:"#818cf8"}},r.acriss),
-            el("div",{style:{fontSize:11,color:"#888",fontFamily:"monospace"}},r.resi),
-            el("div",{style:{fontSize:10,color:"#666"}},"bis ",r.returnDate||"–"," · LOR ",r.lor,"T")
-          ),
-          el("button",{class:"del",onClick:()=>{state.resis=state.resis.filter(x=>x.id!==r.id);showToast("🗑 Gelöscht");render()}},"×")
-        ),
-        p?el("div",{style:{marginTop:4,fontSize:10,color:"#555"}},p.catLabel," · ",p.bodyLabel," · ",p.transLabel):null
-      );
-    })
-  );
+  var wrap=document.createDocumentFragment();
+  wrap.appendChild(renderScanButtons());
+  var nr=state.nr;
+  var form=h("div",{class:"card",style:{border:"1px solid #2a2a45"}});
+  form.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:O,marginBottom:"10px"}},"+ Reservierung manuell"));
+  var grid=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"10px"}});
+
+  function inp(lbl,type,placeholder,val,onchange){
+    var d=h("div",{});
+    d.appendChild(h("div",{style:{fontSize:"10px",color:"#888",marginBottom:"4px",textTransform:"uppercase"}},lbl));
+    var i=h("input",{class:"inp",type:type,placeholder:placeholder,value:val||""});
+    i.addEventListener("input",onchange);d.appendChild(i);return d;
+  }
+
+  grid.appendChild(inp("Pickup Zeit","time","",nr.time,function(e){state.nr.time=e.target.value;}));
+  grid.appendChild(inp("Resi-Nr.","text","9734xxxxxx",nr.resi,function(e){state.nr.resi=e.target.value;}));
+
+  var acDiv=h("div",{});
+  acDiv.appendChild(h("div",{style:{fontSize:"10px",color:"#888",marginBottom:"4px",textTransform:"uppercase"}},"ACRISS"));
+  var acInp=h("input",{class:"inp",placeholder:"CDAR",maxlength:"4",value:nr.acriss||"",style:{textTransform:"uppercase",fontFamily:"monospace",letterSpacing:"2px",color:nr.acriss&&nr.acriss.length===4?"#4ade80":"#fff"}});
+  acInp.addEventListener("input",function(e){state.nr.acriss=e.target.value.toUpperCase().slice(0,4);render();});
+  acDiv.appendChild(acInp);
+  if(nr.acriss&&nr.acriss.length===4){var p=parseA(nr.acriss);if(p)acDiv.appendChild(h("div",{style:{fontSize:"9px",color:"#4ade80",marginTop:"2px"}},p.catLabel+" · "+p.bodyLabel+" · "+p.transLabel));}
+  grid.appendChild(acDiv);
+
+  grid.appendChild(inp("Rückgabe","text","12.06.",nr.returnDate,function(e){state.nr.returnDate=e.target.value;}));
+  var lorDiv=h("div",{style:{gridColumn:"span 2"}});
+  lorDiv.appendChild(h("div",{style:{fontSize:"10px",color:"#888",marginBottom:"4px",textTransform:"uppercase"}},"LOR (Tage)"));
+  var lorInp=h("input",{class:"inp",type:"number",placeholder:"4",value:nr.lor||""});
+  lorInp.addEventListener("input",function(e){state.nr.lor=e.target.value;});
+  lorDiv.appendChild(lorInp);grid.appendChild(lorDiv);
+  form.appendChild(grid);
+
+  var addBtn=h("button",{class:"btn"},"+ Hinzufügen");
+  addBtn.addEventListener("click",function(){
+    if(!state.nr.acriss||!state.nr.resi){showToast("⚠️ ACRISS + Resi-Nr. nötig");return;}
+    state.resis.push(Object.assign({},state.nr,{id:Date.now()}));
+    state.nr={time:"",resi:"",acriss:"",returnDate:"",lor:""};
+    showToast("✅ Reservierung hinzugefügt");render();
+  });
+  form.appendChild(addBtn);wrap.appendChild(form);
+
+  var hdr=h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}});
+  hdr.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:"#888"}},"Reservierungen ("+state.resis.length+")"));
+  var clrBtn=h("button",{style:{background:"#2a1515",border:"1px solid #dc2626",color:"#f87171",borderRadius:"6px",padding:"4px 10px",fontSize:"11px",cursor:"pointer"}},"Alle löschen");
+  clrBtn.addEventListener("click",function(){if(confirm("Alle Resis löschen?")){state.resis=[];render();}});
+  hdr.appendChild(clrBtn);wrap.appendChild(hdr);
+
+  state.resis.forEach(function(r){
+    var p=parseA(r.acriss);
+    var card=h("div",{class:"card"});
+    var row=h("div",{style:{display:"flex",alignItems:"center",gap:"8px"}});
+    row.appendChild(h("div",{style:{fontFamily:"monospace",fontSize:"13px",fontWeight:"700",color:O,minWidth:"48px"}},r.time||"–"));
+    var info=h("div",{style:{flex:"1"}});
+    info.appendChild(h("div",{style:{fontFamily:"monospace",fontSize:"15px",fontWeight:"700",color:"#818cf8"}},r.acriss));
+    info.appendChild(h("div",{style:{fontSize:"11px",color:"#888",fontFamily:"monospace"}},r.resi));
+    info.appendChild(h("div",{style:{fontSize:"10px",color:"#666"}},"bis "+(r.returnDate||"–")+" · LOR "+r.lor+"T"));
+    row.appendChild(info);
+    var del=h("button",{class:"del"},"×");
+    var rid=r.id;
+    del.addEventListener("click",function(){state.resis=state.resis.filter(function(x){return x.id!==rid;});showToast("🗑 Gelöscht");render();});
+    row.appendChild(del);card.appendChild(row);
+    if(p)card.appendChild(h("div",{style:{marginTop:"4px",fontSize:"10px",color:"#555"}},p.catLabel+" · "+p.bodyLabel+" · "+p.transLabel));
+    wrap.appendChild(card);
+  });
+  return wrap;
 }
 
-function renderSettings(){
-  let keyInput=state.apiKey;
-  return el("div",{},
-    el("div",{style:{background:"linear-gradient(135deg,#7c3aed22,#4f46e522)",border:"1px solid #7c3aed44",borderRadius:12,padding:"16px",marginBottom:16}},
-      el("div",{style:{fontSize:20,textAlign:"center",marginBottom:8}},"🤖"),
-      el("div",{style:{fontSize:15,fontWeight:700,textAlign:"center",marginBottom:4}},"KI Foto-Scan"),
-      el("div",{style:{fontSize:12,color:"#999",textAlign:"center",lineHeight:1.6}},
-        "Fotografiere den Lynx Screen.","\n",
-        "Die KI erkennt automatisch alle Drops & Reservierungen."
-      )
-    ),
-    el("div",{class:"card"},
-      el("div",{style:{fontSize:12,fontWeight:700,color:"#4ade80",marginBottom:10}},"🔑 Google Gemini API Key (Kostenlos!)"),
-      el("div",{style:{background:"#052e16",borderRadius:8,padding:"8px 10px",marginBottom:10}},
-        el("div",{style:{fontSize:11,color:"#4ade80",fontWeight:700,marginBottom:4}},"✅ 100% KOSTENLOS – Google Gemini"),
-        el("div",{style:{fontSize:11,color:"#86efac",lineHeight:1.7}},
-          "1. ",el("span",{style:{color:"#4ade80"}},"aistudio.google.com")," öffnen\n",
-          "2. Mit Google Account einloggen\n",
-          "3. 'Get API Key' → 'Create API Key'\n",
-          "4. Key kopieren & hier eintragen\n",
-          "5. Fertig – keine Kreditkarte nötig! 🎉"
-        )
-      ),
-      el("input",{
-        class:"inp",
-        type:"password",
-        placeholder:"AIzaSy...",
-        value:state.apiKey,
-        style:{fontFamily:"monospace",marginBottom:10},
-        onInput:e=>{keyInput=e.target.value}
-      }),
-      el("button",{class:"btn",onClick:()=>{
-        if(!keyInput.startsWith("AIza")&&!keyInput.startsWith("AQ.")){showToast("⚠️ Ungültiger Key");return}
-        state.apiKey=keyInput;
-        localStorage.setItem("sixt_gemini_key",keyInput);
-        showToast("✅ API Key gespeichert!");render();
-      }},"💾 Speichern"),
-      state.apiKey && el("div",{style:{marginTop:10,padding:"8px 12px",background:"#052e16",borderRadius:8,fontSize:11,color:"#4ade80"}},
-        "✅ Gemini Key aktiv: ",state.apiKey.slice(0,12),"..."
-      )
-    ),
-    el("div",{class:"card"},
-      el("div",{style:{fontSize:12,fontWeight:700,color:O,marginBottom:10}},"📸 So funktioniert der Scan"),
-      ...[
-        {icon:"1️⃣",text:"Lynx Screen auf PC aufmachen (Drops oder Reservations)"},
-        {icon:"2️⃣",text:"Auf '📸 Lynx Screen fotografieren' tippen"},
-        {icon:"3️⃣",text:"Foto vom Bildschirm machen"},
-        {icon:"4️⃣",text:"KI liest alle Daten automatisch aus"},
-        {icon:"5️⃣",text:"Fleet Plan wird sofort aktualisiert"},
-      ].map(s=>el("div",{style:{display:"flex",gap:10,padding:"6px 0",borderBottom:"1px solid #1f1f35"}},
-        el("span",{style:{fontSize:16}},s.icon),
-        el("span",{style:{fontSize:12,color:"#ccc"}},s.text)
-      ))
-    ),
-    el("div",{class:"card"},
-      el("div",{style:{fontSize:12,fontWeight:700,color:"#f87171",marginBottom:8}},"🗑 Daten zurücksetzen"),
-      el("div",{style:{display:"flex",gap:8}},
-        el("button",{style:{flex:1,background:"#2a1515",border:"1px solid #dc2626",color:"#f87171",borderRadius:8,padding:"10px",cursor:"pointer"},
-          onClick:()=>{if(confirm("Alle Drops löschen?"))state.drops=[];render();showToast("🗑 Drops gelöscht")}},"Drops leeren"),
-        el("button",{style:{flex:1,background:"#2a1515",border:"1px solid #dc2626",color:"#f87171",borderRadius:8,padding:"10px",cursor:"pointer"},
-          onClick:()=>{if(confirm("Alle Resis löschen?"))state.resis=[];render();showToast("🗑 Resis gelöscht")}},"Resis leeren")
-      )
-    )
-  );
-}
+function renderKey(){
+  var wrap=document.createDocumentFragment();
+  var info=h("div",{style:{background:"linear-gradient(135deg,#052e1688,#0f766e22)",border:"1px solid #4ade8044",borderRadius:"12px",padding:"14px",marginBottom:"16px",textAlign:"center"}});
+  info.appendChild(h("div",{style:{fontSize:"20px",marginBottom:"6px"}},"🆓"));
+  info.appendChild(h("div",{style:{fontSize:"14px",fontWeight:"700",color:"#4ade80",marginBottom:"4px"}},"Google Gemini – 100% Kostenlos"));
+  info.appendChild(h("div",{style:{fontSize:"11px",color:"#86efac"}},"Kein Abo, keine Kreditkarte nötig"));
+  wrap.appendChild(info);
 
-function renderBottomNav(){
-  const tabs=[{k:"plan",icon:"📋",label:"Plan"},{k:"drops",icon:"📥",label:"Drops"},{k:"resis",icon:"📅",label:"Resis"},{k:"settings",icon:"⚙️",label:"Key"}];
-  return el("div",{style:{position:"fixed",bottom:0,left:0,right:0,background:"#0d0d1a",borderTop:"1px solid #1f1f35",display:"flex",zIndex:100}},
-    ...tabs.map(t=>el("button",{
-      style:{flex:1,background:"none",border:"none",padding:"10px 0 8px",cursor:"pointer",color:state.tab===t.k?"#FF6600":"#555"},
-      onClick:()=>{state.tab=t.k;render()}
-    },
-      el("div",{style:{fontSize:18}},t.icon),
-      el("div",{style:{fontSize:10,fontWeight:state.tab===t.k?700:400}},t.label)
-    ))
-  );
+  var form=h("div",{class:"card"});
+  form.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:"#4ade80",marginBottom:"10px"}},"🔑 Google Gemini API Key"));
+  var steps=h("div",{style:{background:"#0a1a0a",borderRadius:"8px",padding:"10px",marginBottom:"12px"}});
+  ["1. aistudio.google.com öffnen","2. Mit Google Account einloggen","3. API-Schlüssel → API-Schlüssel erstellen","4. Key kopieren (beginnt mit AIza... oder AQ...)","5. Hier eintragen → Speichern"].forEach(function(s){
+    steps.appendChild(h("div",{style:{fontSize:"11px",color:"#4ade80",padding:"2px 0"}},s));
+  });
+  form.appendChild(steps);
+
+  var keyInp=h("input",{class:"inp",type:"password",placeholder:"AIzaSy... oder AQ...",value:state.apiKey||"",style:{fontFamily:"monospace",marginBottom:"10px"}});
+  form.appendChild(keyInp);
+
+  var saveBtn=h("button",{class:"btn"},"💾 Speichern");
+  saveBtn.addEventListener("click",function(){
+    var val=keyInp.value.trim();
+    if(!val){showToast("⚠️ Key eingeben!");return;}
+    state.apiKey=val;
+    localStorage.setItem("sixt_gemini_key",val);
+    showToast("✅ Key gespeichert!");render();
+  });
+  form.appendChild(saveBtn);
+
+  if(state.apiKey){
+    form.appendChild(h("div",{style:{marginTop:"10px",padding:"8px 12px",background:"#052e16",borderRadius:"8px",fontSize:"11px",color:"#4ade80"}},"✅ Key aktiv: "+state.apiKey.slice(0,14)+"..."));
+  }
+  wrap.appendChild(form);
+
+  var reset=h("div",{class:"card"});
+  reset.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:"#f87171",marginBottom:"8px"}},"🗑 Daten zurücksetzen"));
+  var btns=h("div",{style:{display:"flex",gap:"8px"}});
+  var b1=h("button",{style:{flex:"1",background:"#2a1515",border:"1px solid #dc2626",color:"#f87171",borderRadius:"8px",padding:"10px",cursor:"pointer"}},"Drops leeren");
+  b1.addEventListener("click",function(){if(confirm("Alle Drops löschen?")){state.drops=[];showToast("🗑 Drops gelöscht");render();}});
+  var b2=h("button",{style:{flex:"1",background:"#2a1515",border:"1px solid #dc2626",color:"#f87171",borderRadius:"8px",padding:"10px",cursor:"pointer"}},"Resis leeren");
+  b2.addEventListener("click",function(){if(confirm("Alle Resis löschen?")){state.resis=[];showToast("🗑 Resis gelöscht");render();}});
+  btns.appendChild(b1);btns.appendChild(b2);reset.appendChild(btns);wrap.appendChild(reset);
+  return wrap;
 }
 
 function render(){
-  const app=document.getElementById("app");
+  var app=document.getElementById("app");
   app.innerHTML="";
-  app.appendChild(renderHeader());
+
+  // Header
+  var hdr=h("div",{style:{background:"linear-gradient(135deg,#FF6600,#cc4400)",padding:"14px 16px",display:"flex",alignItems:"center",gap:"12px",position:"sticky",top:"0",zIndex:"100",boxShadow:"0 2px 16px #FF660044"}});
+  hdr.appendChild(h("div",{style:{fontSize:"24px"}},"🚗"));
+  var title=h("div",{style:{flex:"1"}});
+  title.appendChild(h("div",{style:{fontSize:"15px",fontWeight:"700"}},"Fleet Plan"));
+  title.appendChild(h("div",{style:{fontSize:"10px",opacity:"0.8",fontFamily:"monospace"}},"Sixt Harburg · 46790"));
+  hdr.appendChild(title);
+  var tabs=h("div",{style:{display:"flex",gap:"3px",background:"rgba(0,0,0,0.2)",borderRadius:"8px",padding:"3px"}});
+  [{k:"plan",i:"📋",l:"Plan"},{k:"drops",i:"📥",l:"Drops"},{k:"resis",i:"📅",l:"Resis"},{k:"key",i:"🔑",l:"Key"}].forEach(function(t){
+    var btn=h("button",{style:{background:state.tab===t.k?"#fff":"transparent",color:state.tab===t.k?"#FF6600":"#fff",border:"none",borderRadius:"6px",padding:"5px 7px",fontSize:"10px",fontWeight:state.tab===t.k?"700":"400",cursor:"pointer"}},t.i+" "+t.l);
+    (function(tk){btn.addEventListener("click",function(){state.tab=tk;render();});})(t.k);
+    tabs.appendChild(btn);
+  });
+  hdr.appendChild(tabs);
+  app.appendChild(hdr);
+
+  // Toast
   if(state.toast){
-    app.appendChild(el("div",{style:{position:"fixed",top:65,left:"50%",transform:"translateX(-50%)",background:"#1a1a2e",border:"1px solid #FF6600",borderRadius:10,padding:"10px 18px",fontSize:13,fontWeight:600,zIndex:999,color:"#fff",boxShadow:"0 4px 20px #00000088",whiteSpace:"nowrap",maxWidth:"90vw",textAlign:"center"}},state.toast));
+    var toast=h("div",{style:{position:"fixed",top:"65px",left:"50%",transform:"translateX(-50%)",background:"#1a1a2e",border:"1px solid #FF6600",borderRadius:"10px",padding:"10px 18px",fontSize:"13px",fontWeight:"600",zIndex:"999",color:"#fff",boxShadow:"0 4px 20px #00000088",whiteSpace:"nowrap",maxWidth:"90vw",textAlign:"center"}},state.toast);
+    app.appendChild(toast);
   }
-  const content=el("div",{style:{padding:"14px",paddingBottom:80}});
+
+  // Content
+  var content=h("div",{style:{padding:"14px",paddingBottom:"80px"}});
   if(state.tab==="plan")content.appendChild(renderPlan());
   else if(state.tab==="drops")content.appendChild(renderDrops());
   else if(state.tab==="resis")content.appendChild(renderResis());
-  else content.appendChild(renderSettings());
+  else content.appendChild(renderKey());
   app.appendChild(content);
-  app.appendChild(renderBottomNav());
+
+  // Bottom nav
+  var nav=h("div",{style:{position:"fixed",bottom:"0",left:"0",right:"0",background:"#0d0d1a",borderTop:"1px solid #1f1f35",display:"flex",zIndex:"100"}});
+  [{k:"plan",i:"📋",l:"Plan"},{k:"drops",i:"📥",l:"Drops"},{k:"resis",i:"📅",l:"Resis"},{k:"key",i:"🔑",l:"Key"}].forEach(function(t){
+    var btn=h("button",{style:{flex:"1",background:"none",border:"none",padding:"10px 0 8px",cursor:"pointer",color:state.tab===t.k?"#FF6600":"#555"}});
+    btn.appendChild(h("div",{style:{fontSize:"18px"}},t.i));
+    btn.appendChild(h("div",{style:{fontSize:"10px",fontWeight:state.tab===t.k?"700":"400"}},t.l));
+    (function(tk){btn.addEventListener("click",function(){state.tab=tk;render();});})(t.k);
+    nav.appendChild(btn);
+  });
+  app.appendChild(nav);
 }
+
+// CSS animation
+var style=document.createElement("style");
+style.textContent="@keyframes spin{to{transform:rotate(360deg)}}";
+document.head.appendChild(style);
 
 render();
 </script>
