@@ -224,7 +224,8 @@ Nur JSON zurückgeben, kein Text davor oder danach.`;
     });
 
     const data=await res.json();
-    if(!res.ok)throw new Error(data.error?.message||"API Fehler");
+    if(!res.ok)throw new Error(data.error?.message||data.error?.status||"API Fehler: "+res.status);
+    if(!data.candidates||!data.candidates[0])throw new Error("Keine Antwort von KI: "+JSON.stringify(data).slice(0,100));
 
     const text=data.candidates[0].content.parts[0].text.replace(/```json|```/g,"").trim();
     const parsed=JSON.parse(text);
