@@ -32,12 +32,28 @@ const CATS={M:"Mini",E:"Economy",H:"Economy Elite",C:"Compact",D:"Compact Elite"
 const BODIES={B:"2-türig",D:"4-türig",L:"Gran Coupé",W:"Kombi",F:"SUV",T:"Cabriolet",E:"Coupé",V:"Transporter",Z:"Glücksauto"};
 const TRANS={M:"Schalt",A:"Automatik",D:"Allrad",L:"Luxus",S:"Spezial"};
 const FAMILY={B:"PKW",D:"PKW",L:"PKW",W:"Kombi",F:"SUV",T:"Cabrio",E:"Coupé",V:"Transporter",Z:"Sonstige"};
-const STATUS={"0":{label:"Verfügbar",color:"#16a34a",bg:"#dcfce7",icon:"✅"},"3":{label:"Reserviert",color:"#d97706",bg:"#fef3c7",icon:"🔒"},"4":{label:"Aufbereitung",color:"#2563eb",bg:"#dbeafe",icon:"⏳"},"5":{label:"Kaputt",color:"#dc2626",bg:"#fee2e2",icon:"🔧"},"6":{label:"Kaputt",color:"#dc2626",bg:"#fee2e2",icon:"🔧"}};
+const STATUS={
+  "0": {label:"Verfügbar",     color:"#16a34a",bg:"#dcfce7",icon:"✅"},
+  "1": {label:"Vermietbereit", color:"#16a34a",bg:"#dcfce7",icon:"✅"},
+  "2": {label:"Vermietbereit", color:"#16a34a",bg:"#dcfce7",icon:"✅"},
+  "3": {label:"Schlüssel offen",color:"#d97706",bg:"#fef3c7",icon:"🔒"},
+  "4": {label:"Aufbereitung",  color:"#2563eb",bg:"#dbeafe",icon:"⏳"},
+  "5": {label:"Kaputt",        color:"#dc2626",bg:"#fee2e2",icon:"🔧"},
+  "6": {label:"Kaputt",        color:"#dc2626",bg:"#fee2e2",icon:"🔧"},
+  "10":{label:"Aufbereitung",  color:"#2563eb",bg:"#dbeafe",icon:"⏳"},
+  "11":{label:"Aufbereitung",  color:"#2563eb",bg:"#dbeafe",icon:"⏳"},
+};
 
 function parseA(c){
   if(!c||c.length<4)return null;
   c=c.toUpperCase();
   return{raw:c,cat:c[0],body:c[1],trans:c[2],catLabel:CATS[c[0]]||c[0],bodyLabel:BODIES[c[1]]||c[1],transLabel:TRANS[c[2]]||c[2],family:FAMILY[c[1]]||"?",catIdx:CAT_ORDER.indexOf(c[0]),isAuto:c[2]==="A"||c[2]==="D"};
+}
+
+function timeToMin(t){
+  if(!t||t.length<4)return -1;
+  var p=t.split(":");
+  return parseInt(p[0])*60+parseInt(p[1]);
 }
 
 function score(b,a,lor){
@@ -88,7 +104,16 @@ function autoMatch(drops,resis){
         return{r,d:overrideDrop,type,manual:true};
       }
     }
-    const cands=pool.filter(d=>!used.has(d.id)).map(d=>({d,s:score(r.acriss,d.acriss,r.lor)})).filter(x=>x.s>-999).sort((a,b)=>b.s-a.s);
+    const cands=pool.filter(function(d){
+      if(used.has(d.id))return false;
+      // Zeitprüfung: Drop muss mind. 1h vor Pickup zurück sein
+      if(d.time&&r.time){
+        var dropReady=timeToMin(d.time)+60; // +1h Aufbereitung
+        var pickupTime=timeToMin(r.time);
+        if(dropReady>pickupTime)return false; // Auto noch nicht bereit!
+      }
+      return true;
+    }).map(d=>({d,s:score(r.acriss,d.acriss,r.lor)})).filter(x=>x.s>-999).sort((a,b)=>b.s-a.s);
     if(!cands.length)return{r,d:null,type:"none"};
     used.add(cands[0].d.id);
     const type=parseA(r.acriss)?.raw===parseA(cands[0].d.acriss)?.raw?"exact":"upgrade";
@@ -127,9 +152,31 @@ var state={
   apiKey:localStorage.getItem("sixt_api_key")||"",
   scanning:false,
   toast:"",
-  nd:{time:"",plate:"",acriss:"",vehicle:"",lor:"",status:"0"},
+  nd:{time:"",plate:"",acriss:"",vehicle:"",lor:"",status:"1"},
   nr:{time:"",resi:"",acriss:"",returnDate:"",lor:""}
 };
+
+function saveToStorage(){
+  try{
+    localStorage.setItem("fleet_drops",JSON.stringify(state.drops));
+    localStorage.setItem("fleet_resis",JSON.stringify(state.resis));
+    localStorage.setItem("fleet_overrides",JSON.stringify(state.overrides));
+  }catch(e){}
+}
+
+function loadFromStorage(){
+  try{
+    var d=localStorage.getItem("fleet_drops");
+    var r=localStorage.getItem("fleet_resis");
+    var o=localStorage.getItem("fleet_overrides");
+    if(d)state.drops=JSON.parse(d);
+    if(r)state.resis=JSON.parse(r);
+    if(o)state.overrides=JSON.parse(o);
+  }catch(e){}
+}
+
+// Load saved data on startup
+loadFromStorage();
 
 var toastTimer=null;
 function showToast(msg,dur){
@@ -257,6 +304,23 @@ function renderPlan(){
   var exact=matches.filter(function(m){return m.type==="exact";}).length;
   var upgrade=matches.filter(function(m){return m.type==="upgrade";}).length;
   var none=matches.filter(function(m){return m.type==="none";}).length;
+  // Daymin: nur Autos die HEUTE verfügbar sind
+  // - Status 1/2 (sofort vermietbereit)
+  // - Status 10/11 (in Aufbereitung)
+  // - Drops VOR 14:30 (können noch heute aufbereitet werden)
+  // NICHT gezählt: Drops NACH 14:30 (erst morgen verfügbar)
+  var availCount=state.drops.filter(function(d){
+    var s=parseInt(d.status)||0;
+    var statusOk=s===1||s===2||s===10||s===11;
+    var hasTime=d.time&&d.time.length>0;
+    var before1430=hasTime&&d.time<="14:30";
+    var noTime=!hasTime;
+    // Status 1/2/10/11 = bereits an Station → zählt immer
+    // Drop mit Zeit: nur wenn vor 14:30
+    // Drop ohne Zeit: zählt (bereits verfügbar)
+    return statusOk||(noTime&&(s===0))||(hasTime&&before1430&&s===0);
+  }).length;
+  var daymin=availCount-state.resis.length;
   var wrap=document.createDocumentFragment();
   wrap.appendChild(renderScanButtons());
 
@@ -386,7 +450,7 @@ function renderDrops(){
   var hdr=h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}});
   hdr.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:"#888"}},"Drops ("+state.drops.length+")"));
   var clrBtn=h("button",{style:{background:"#2a1515",border:"1px solid #dc2626",color:"#f87171",borderRadius:"6px",padding:"4px 10px",fontSize:"11px",cursor:"pointer"}},"Alle löschen");
-  clrBtn.addEventListener("click",function(){if(confirm("Alle Drops löschen?")){state.drops=[];render();}});
+  clrBtn.addEventListener("click",function(){if(confirm("Alle Drops löschen?")){state.drops=[];saveToStorage();render();}});
   hdr.appendChild(clrBtn);wrap.appendChild(hdr);
 
   state.drops.forEach(function(d){
@@ -404,7 +468,7 @@ function renderDrops(){
     right.appendChild(badge);
     var del=h("button",{class:"del"},"×");
     var did=d.id;
-    del.addEventListener("click",function(){state.drops=state.drops.filter(function(x){return x.id!==did;});showToast("🗑 Gelöscht");render();});
+    del.addEventListener("click",function(){state.drops=state.drops.filter(function(x){return x.id!==did;});saveToStorage();showToast("🗑 Gelöscht");render();});
     right.appendChild(del);row.appendChild(right);card.appendChild(row);
     if(p)card.appendChild(h("div",{style:{marginTop:"4px",fontSize:"10px",color:"#555"}},p.catLabel+" · "+p.bodyLabel+" · "+p.transLabel));
     wrap.appendChild(card);
@@ -458,7 +522,7 @@ function renderResis(){
   var hdr=h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}});
   hdr.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:"#888"}},"Reservierungen ("+state.resis.length+")"));
   var clrBtn=h("button",{style:{background:"#2a1515",border:"1px solid #dc2626",color:"#f87171",borderRadius:"6px",padding:"4px 10px",fontSize:"11px",cursor:"pointer"}},"Alle löschen");
-  clrBtn.addEventListener("click",function(){if(confirm("Alle Resis löschen?")){state.resis=[];render();}});
+  clrBtn.addEventListener("click",function(){if(confirm("Alle Resis löschen?")){state.resis=[];saveToStorage();render();}});
   hdr.appendChild(clrBtn);wrap.appendChild(hdr);
 
   state.resis.forEach(function(r){
@@ -473,7 +537,7 @@ function renderResis(){
     row.appendChild(info);
     var del=h("button",{class:"del"},"×");
     var rid=r.id;
-    del.addEventListener("click",function(){state.resis=state.resis.filter(function(x){return x.id!==rid;});showToast("🗑 Gelöscht");render();});
+    del.addEventListener("click",function(){state.resis=state.resis.filter(function(x){return x.id!==rid;});saveToStorage();showToast("🗑 Gelöscht");render();});
     row.appendChild(del);card.appendChild(row);
     if(p)card.appendChild(h("div",{style:{marginTop:"4px",fontSize:"10px",color:"#555"}},p.catLabel+" · "+p.bodyLabel+" · "+p.transLabel));
     wrap.appendChild(card);
@@ -520,9 +584,9 @@ function renderKey(){
   reset.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:"#f87171",marginBottom:"8px"}},"🗑 Daten zurücksetzen"));
   var btns=h("div",{style:{display:"flex",gap:"8px"}});
   var b1=h("button",{style:{flex:"1",background:"#2a1515",border:"1px solid #dc2626",color:"#f87171",borderRadius:"8px",padding:"10px",cursor:"pointer"}},"Drops leeren");
-  b1.addEventListener("click",function(){if(confirm("Alle Drops löschen?")){state.drops=[];showToast("🗑 Drops gelöscht");render();}});
+  b1.addEventListener("click",function(){if(confirm("Alle Drops löschen?")){state.drops=[];saveToStorage();showToast("🗑 Drops gelöscht");render();}});
   var b2=h("button",{style:{flex:"1",background:"#2a1515",border:"1px solid #dc2626",color:"#f87171",borderRadius:"8px",padding:"10px",cursor:"pointer"}},"Resis leeren");
-  b2.addEventListener("click",function(){if(confirm("Alle Resis löschen?")){state.resis=[];showToast("🗑 Resis gelöscht");render();}});
+  b2.addEventListener("click",function(){if(confirm("Alle Resis löschen?")){state.resis=[];saveToStorage();showToast("🗑 Resis gelöscht");render();}});
   btns.appendChild(b1);btns.appendChild(b2);reset.appendChild(btns);wrap.appendChild(reset);
   return wrap;
 }
@@ -589,6 +653,7 @@ function render(){
         row.addEventListener("click",function(){
           state.overrides[state.changeModal.resiId]=dropId;
           state.changeModal=null;
+          saveToStorage();
           showToast(isPlanned?"⚠️ Achtung: Fahrzeug war bereits verplant!":"✅ Fahrzeug geändert!");
           render();
         });
@@ -603,6 +668,7 @@ function render(){
         resetBtn.addEventListener("click",function(){
           delete state.overrides[rid];
           state.changeModal=null;
+          saveToStorage();
           showToast("🔄 Automatisch wiederhergestellt");
           render();
         });
