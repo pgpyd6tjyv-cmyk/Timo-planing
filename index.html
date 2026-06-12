@@ -192,7 +192,7 @@ function showToast(msg,dur){
   toastTimer=setTimeout(function(){state.toast="";render();},dur);
 }
 
-async function scanPhoto(file){
+async function scanPhoto(file,target){
   if(!state.apiKey){showToast("⚠️ Erst API Key im Key-Tab eingeben!");return;}
   state.scanning=true;render();
   showToast("📸 Foto wird gelesen...",8000);
@@ -204,7 +204,7 @@ async function scanPhoto(file){
       r.readAsDataURL(file);
     });
     showToast("🤖 KI analysiert...",8000);
-    var prompt='Analysiere diesen Sixt Lynx Fleet Monitor Screenshot.\nErkenne ob es Drops (Rückgaben) oder Reservations ist.\nGib NUR JSON zurück:\nFür DROPS: {"type":"drops","data":[{"time":"08:00","plate":"M-XX 1234","acriss":"CDAR","vehicle":"VW Golf","lor":"3","status":"0"}]}\nFür RESERVATIONS: {"type":"resis","data":[{"time":"06:00","resi":"9734xxxxxx","acriss":"CDAR","returnDate":"10.06.","lor":"3"}]}\nNur JSON, kein Text!';
+    var prompt='Analysiere diesen Sixt Lynx Fleet Monitor Screenshot.\nErkenne ob es Drops (Rückgaben), Reservations oder Available (verfügbare Fahrzeuge an der Station) ist.\nGib NUR JSON zurück:\nFür DROPS: {"type":"drops","data":[{"time":"08:00","plate":"M-XX 1234","acriss":"CDAR","vehicle":"VW Golf","lor":"3","status":"0"}]}\nFür RESERVATIONS: {"type":"resis","data":[{"time":"06:00","resi":"9734xxxxxx","acriss":"CDAR","returnDate":"10.06.","lor":"3"}]}\nFür AVAILABLE: {"type":"available","data":[{"plate":"M-XX 1234","acriss":"CDAR","vehicle":"VW Golf","status":"1"}]}\nStatus Available: 1=Vermietbereit, 2=Vermietbereit, 3=Schlüssel nicht abgeholt, 10=Aufbereitung, 11=Aufbereitung\nNur JSON, kein Text!';
     var res=await fetch("https://api.anthropic.com/v1/messages",{
       method:"POST",
       headers:{
@@ -231,11 +231,18 @@ async function scanPhoto(file){
     if(parsed.type==="drops"&&parsed.data&&parsed.data.length){
       parsed.data.forEach(function(d){state.drops.push(Object.assign({},d,{id:Date.now()+Math.random()}));});
       state.tab="drops";
+      saveToStorage();
       showToast("✅ "+parsed.data.length+" Drops importiert!");
     }else if(parsed.type==="resis"&&parsed.data&&parsed.data.length){
       parsed.data.forEach(function(d){state.resis.push(Object.assign({},d,{id:Date.now()+Math.random()}));});
       state.tab="resis";
+      saveToStorage();
       showToast("✅ "+parsed.data.length+" Reservierungen importiert!");
+    }else if(parsed.type==="available"&&parsed.data&&parsed.data.length){
+      parsed.data.forEach(function(d){state.available.push(Object.assign({},d,{id:Date.now()+Math.random()}));});
+      state.tab="available";
+      saveToStorage();
+      showToast("✅ "+parsed.data.length+" Available Fahrzeuge importiert!");
     }else{
       showToast("⚠️ Keine Daten erkannt – nochmal versuchen");
     }
@@ -271,7 +278,7 @@ function h(tag,attrs,children){
 
 function t(text){return document.createTextNode(String(text||""));}
 
-function renderScanButtons(){
+function renderScanButtons(target){
   var wrap=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"16px"}});
   if(state.scanning){
     var spinner=h("div",{style:{gridColumn:"span 2",background:"linear-gradient(135deg,#7c3aed,#4f46e5)",borderRadius:"10px",padding:"13px",display:"flex",alignItems:"center",justifyContent:"center",gap:"10px",color:"#fff",fontWeight:"700"}});
@@ -284,7 +291,7 @@ function renderScanButtons(){
     lbl1.innerHTML='<span style="font-size:18px">📸</span><span>Kamera</span>';
     var inp1=document.createElement("input");
     inp1.type="file";inp1.accept="image/*";inp1.setAttribute("capture","environment");
-    inp1.addEventListener("change",function(){if(this.files&&this.files[0])scanPhoto(this.files[0]);});
+    inp1.addEventListener("change",function(){if(this.files&&this.files[0])scanPhoto(this.files[0],target);});
     lbl1.appendChild(inp1);
     wrap.appendChild(lbl1);
 
@@ -294,7 +301,7 @@ function renderScanButtons(){
     lbl2.innerHTML='<span style="font-size:18px">🖼️</span><span>Galerie</span>';
     var inp2=document.createElement("input");
     inp2.type="file";inp2.accept="image/*";
-    inp2.addEventListener("change",function(){if(this.files&&this.files[0])scanPhoto(this.files[0]);});
+    inp2.addEventListener("change",function(){if(this.files&&this.files[0])scanPhoto(this.files[0],target);});
     lbl2.appendChild(inp2);
     wrap.appendChild(lbl2);
   }
@@ -327,7 +334,7 @@ function renderPlan(){
   }).length;
   var daymin=availCount-state.resis.length;
   var wrap=document.createDocumentFragment();
-  wrap.appendChild(renderScanButtons());
+  wrap.appendChild(renderScanButtons("drops"));
 
   // KPIs
   var kpis=h("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"8px",marginBottom:"16px"}});
@@ -483,7 +490,7 @@ function renderDrops(){
 
 function renderResis(){
   var wrap=document.createDocumentFragment();
-  wrap.appendChild(renderScanButtons());
+  wrap.appendChild(renderScanButtons("resis"));
   var nr=state.nr;
   var form=h("div",{class:"card",style:{border:"1px solid #2a2a45"}});
   form.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:O,marginBottom:"10px"}},"+ Reservierung manuell"));
@@ -553,6 +560,9 @@ function renderResis(){
 function renderAvailable(){
   var na=state.na;
   var wrap=document.createDocumentFragment();
+
+  // Scan buttons
+  wrap.appendChild(renderScanButtons("available"));
 
   // Info box
   var info=h("div",{style:{background:"#0a1a0a",border:"1px solid #16a34a44",borderRadius:"10px",padding:"10px 12px",marginBottom:"12px",fontSize:"11px",color:"#86efac"}});
