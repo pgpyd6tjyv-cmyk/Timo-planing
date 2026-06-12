@@ -16,154 +16,157 @@ select option{background:#1a1a2e}
 .inp{background:#1a1a2e;border:1px solid #2a2a45;border-radius:8px;color:#fff;padding:10px 12px;outline:none;width:100%}
 .inp:focus{border-color:#FF6600}
 .btn{background:#FF6600;color:#fff;border:none;border-radius:10px;padding:13px;width:100%;font-size:15px;font-weight:700;cursor:pointer}
-.btn:active{opacity:0.8}
+.btn:active{opacity:.8}
 .card{background:#131325;border-radius:12px;padding:14px;margin-bottom:10px;border:1px solid #1f1f35}
 .del{background:#2a1515;border:1px solid #dc2626;color:#f87171;border-radius:6px;padding:5px 12px;font-size:11px;cursor:pointer}
-.scan-label{display:flex;align-items:center;justify-content:center;gap:8px;border-radius:10px;padding:13px;font-weight:700;cursor:pointer;position:relative;overflow:hidden;color:#fff}
+.scan-label{display:flex;align-items:center;justify-content:center;gap:8px;border-radius:10px;padding:13px;font-weight:700;cursor:pointer;position:relative;overflow:hidden;color:#fff;font-size:13px}
 .scan-label input[type=file]{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:100px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}
 </style>
 </head>
 <body>
 <div id="app"></div>
 <script>
-const O="#FF6600";
-const CAT_ORDER=["M","E","H","C","D","I","J","S","R","F","G","P","U","L","W","X"];
-const CATS={M:"Mini",E:"Economy",H:"Economy Elite",C:"Compact",D:"Compact Elite",I:"Intermediate",J:"Intermediate Elite",S:"Standard",R:"Standard Elite",F:"Fullsize",G:"Fullsize Elite",P:"Premium",U:"Premium Elite",L:"Luxury",W:"Luxury Elite",X:"Exklusiv"};
-const BODIES={B:"2-türig",D:"4-türig",L:"Gran Coupé",W:"Kombi",F:"SUV",T:"Cabriolet",E:"Coupé",V:"Transporter",Z:"Glücksauto"};
-const TRANS={M:"Schalt",A:"Automatik",D:"Allrad",L:"Luxus",S:"Spezial"};
-const FAMILY={B:"PKW",D:"PKW",L:"PKW",W:"Kombi",F:"SUV",T:"Cabrio",E:"Coupé",V:"Transporter",Z:"Sonstige"};
-const STATUS={
-  "0": {label:"Verfügbar",     color:"#16a34a",bg:"#dcfce7",icon:"✅"},
-  "1": {label:"Vermietbereit", color:"#16a34a",bg:"#dcfce7",icon:"✅"},
-  "2": {label:"Vermietbereit", color:"#16a34a",bg:"#dcfce7",icon:"✅"},
-  "3": {label:"Schlüssel offen",color:"#d97706",bg:"#fef3c7",icon:"🔒"},
-  "4": {label:"Verfügbar",     color:"#16a34a",bg:"#dcfce7",icon:"✅"},
-  "5": {label:"Kaputt",        color:"#dc2626",bg:"#fee2e2",icon:"🔧"},
-  "6": {label:"Kaputt",        color:"#dc2626",bg:"#fee2e2",icon:"🔧"},
-  "9": {label:"Verfügbar",     color:"#16a34a",bg:"#dcfce7",icon:"✅"},
-  "10":{label:"Aufbereitung",  color:"#2563eb",bg:"#dbeafe",icon:"⏳"},
-  "11":{label:"Aufbereitung",  color:"#2563eb",bg:"#dbeafe",icon:"⏳"},
+"use strict";
+
+/* ============ ACRISS ============ */
+var CAT_ORDER=["M","E","H","C","D","I","J","S","R","F","G","P","U","L","W","X"];
+var CATS={M:"Mini",E:"Economy",H:"Economy Elite",C:"Compact",D:"Compact Elite",I:"Intermediate",J:"Intermediate Elite",S:"Standard",R:"Standard Elite",F:"Fullsize",G:"Fullsize Elite",P:"Premium",U:"Premium Elite",L:"Luxury",W:"Luxury Elite",X:"Exklusiv"};
+var BODIES={B:"2-türig",D:"4-türig",L:"Gran Coupé",W:"Kombi",F:"SUV",T:"Cabriolet",E:"Coupé",V:"Transporter",Z:"Glücksauto"};
+var TRANS={M:"Schalt",A:"Automatik",D:"Allrad",L:"Luxus",S:"Spezial"};
+var FAMILY={B:"PKW",D:"PKW",L:"PKW",W:"Kombi",F:"SUV",T:"Cabrio",E:"Coupé",V:"Transporter",Z:"Sonstige"};
+var STATUS={
+  "0":{label:"Verfügbar",color:"#16a34a",bg:"#dcfce7",icon:"✅"},
+  "1":{label:"Vermietbereit",color:"#16a34a",bg:"#dcfce7",icon:"✅"},
+  "2":{label:"Vermietbereit",color:"#16a34a",bg:"#dcfce7",icon:"✅"},
+  "3":{label:"Nicht im Bestand",color:"#dc2626",bg:"#fee2e2",icon:"🔒"},
+  "4":{label:"Verfügbar",color:"#16a34a",bg:"#dcfce7",icon:"✅"},
+  "5":{label:"Kaputt",color:"#dc2626",bg:"#fee2e2",icon:"🔧"},
+  "6":{label:"Kaputt",color:"#dc2626",bg:"#fee2e2",icon:"🔧"},
+  "9":{label:"Verfügbar",color:"#16a34a",bg:"#dcfce7",icon:"✅"},
+  "10":{label:"Aufbereitung",color:"#2563eb",bg:"#dbeafe",icon:"⏳"},
+  "11":{label:"Aufbereitung",color:"#2563eb",bg:"#dbeafe",icon:"⏳"}
 };
+var ELEKTRO=["E","C","O"];
+var PLANBAR_AVAIL=[1,2,4,9,10,11];   /* Status 3 = NICHT im Bestand! 5/6 kaputt */
+var PLANBAR_DROP=[0,1,2,4,9,10,11];
 
 function parseA(c){
   if(!c||c.length<4)return null;
   c=c.toUpperCase();
-  return{raw:c,cat:c[0],body:c[1],trans:c[2],catLabel:CATS[c[0]]||c[0],bodyLabel:BODIES[c[1]]||c[1],transLabel:TRANS[c[2]]||c[2],family:FAMILY[c[1]]||"?",catIdx:CAT_ORDER.indexOf(c[0]),isAuto:c[2]==="A"||c[2]==="D"};
+  return{raw:c,cat:c[0],body:c[1],trans:c[2],fuel:c[3],
+    catLabel:CATS[c[0]]||c[0],bodyLabel:BODIES[c[1]]||c[1],transLabel:TRANS[c[2]]||c[2],
+    family:FAMILY[c[1]]||"?",catIdx:CAT_ORDER.indexOf(c[0]),
+    isAuto:c[2]==="A"||c[2]==="D",isElektro:ELEKTRO.indexOf(c[3])>=0};
 }
-
 function timeToMin(t){
-  if(!t||t.length<4)return -1;
-  var p=t.split(":");
-  return parseInt(p[0])*60+parseInt(p[1]);
+  if(!t||t.indexOf(":")<0)return -1;
+  var p=t.split(":");return parseInt(p[0],10)*60+parseInt(p[1],10);
 }
 
-function score(b,a,lor){
-  const bp=parseA(b),ap=parseA(a);
+/* ============ MATCHING ============ */
+function score(b,a){
+  var bp=parseA(b),ap=parseA(a);
   if(!bp||!ap)return -999;
-  if(bp.isAuto&&!ap.isAuto)return -999;
-  if(ap.catIdx<bp.catIdx)return -999;
-  // Verbrenner-Kunde bekommt kein Elektro
-  // Verbrenner/Diesel/Hybrid-Kunde bekommt kein Elektro (E, C, O)
-  if((bp.fuel==="R"||bp.fuel==="D"||bp.fuel==="H")&&(ap.fuel==="E"||ap.fuel==="C"||ap.fuel==="O"))return -999;
-  // Hochklassige Cabrios (über C-Klasse) nur an Cabrio-Buchungen
-  if(ap.body==="T"&&ap.catIdx>3&&bp.body!=="T")return -999;
-  
-  var days=parseInt(lor)||1;
+  if(bp.isAuto&&!ap.isAuto)return -999;                       /* Auto-Kunde NIE Manual */
+  if(ap.catIdx<bp.catIdx)return -999;                          /* Kein Downgrade */
+  if(!bp.isElektro&&ap.isElektro)return -999;                  /* Verbrenner → kein Elektro */
+  if(ap.isElektro===false&&bp.isElektro)return -999;           /* Elektro-Kunde → nur Elektro */
+  if(ap.body==="T"&&ap.catIdx>3&&bp.body!=="T")return -999;    /* Cabrio über C nur an Cabrio-Buchung */
   var steps=ap.catIdx-bp.catIdx;
-  
-  // Lange Mieten (8+ Tage): max 1 Stufe Upgrade erlaubt
-  if(days>=8&&steps>1)return -999;
-  
-  // Strafe pro Stufe je nach LOR
-  var penalty;
-  if(days<=2)      penalty=10;  // Tagesmiete: tolerant
-  else if(days<=7) penalty=20;  // Mittellang: moderat
-  else             penalty=40;  // Lange Miete: sehr streng
-  
-  let s=0;
+  var s=200;                                                    /* Basis: Kunde wird IMMER bedient */
   if(ap.raw===bp.raw)s+=100;
   if(ap.family===bp.family)s+=50;
   if(ap.cat===bp.cat)s+=30;
-  if(!bp.isAuto&&!ap.isAuto)s+=70; // Manual→Manual stark bevorzugt
-  if(!bp.isAuto&&ap.isAuto)s+=5;
+  if(!bp.isAuto&&!ap.isAuto)s+=70;                             /* Manual→Manual bevorzugt */
+  if(!bp.isAuto&&ap.isAuto)s+=5;                               /* Manual→Auto Fallback */
   if(bp.isAuto&&ap.isAuto)s+=20;
-  s-=steps*penalty;
+  s-=steps*8;                                                  /* nächstmögliches Upgrade */
   return s;
 }
 
-function autoMatch(drops,resis){
-  const pool=drops;
-  const used=new Set();
-  // Pre-assign overrides
-  Object.values(state.overrides).forEach(function(did){used.add(did);});
-  return resis.map(r=>{
-    // Manual override?
+function getPool(){
+  var avail=state.available.filter(function(a){
+    return PLANBAR_AVAIL.indexOf(parseInt(a.status,10)||0)>=0;
+  }).map(function(a){return{id:"av"+a.id,plate:a.plate,acriss:a.acriss,vehicle:a.vehicle,lor:a.lor||"",status:a.status,time:"",src:"avail"};});
+  var drops=state.drops.filter(function(d){
+    return PLANBAR_DROP.indexOf(parseInt(d.status,10)||0)>=0;
+  }).map(function(d){return{id:"dr"+d.id,plate:d.plate,acriss:d.acriss,vehicle:d.vehicle,lor:d.lor||"",status:d.status,time:d.time||"",src:"drop"};});
+  return avail.concat(drops);
+}
+
+function autoMatch(){
+  var pool=getPool();
+  var used={};
+  Object.keys(state.overrides).forEach(function(rid){used[state.overrides[rid]]=true;});
+  return state.resis.map(function(r){
+    /* Manueller Override hat Vorrang */
     if(state.overrides[r.id]){
-      const overrideDrop=drops.find(d=>d.id===state.overrides[r.id]);
-      if(overrideDrop){
-        const type=parseA(r.acriss)?.raw===parseA(overrideDrop.acriss)?.raw?"exact":"upgrade";
-        return{r,d:overrideDrop,type,manual:true};
+      var ov=pool.filter(function(p){return p.id===state.overrides[r.id];})[0];
+      if(!ov){ /* override could refer to a non-planbar vehicle - look it up raw */
+        var rawA=state.available.filter(function(a){return "av"+a.id===state.overrides[r.id];})[0];
+        var rawD=state.drops.filter(function(d){return "dr"+d.id===state.overrides[r.id];})[0];
+        if(rawA)ov={id:"av"+rawA.id,plate:rawA.plate,acriss:rawA.acriss,vehicle:rawA.vehicle,time:"",src:"avail"};
+        if(rawD)ov={id:"dr"+rawD.id,plate:rawD.plate,acriss:rawD.acriss,vehicle:rawD.vehicle,time:rawD.time||"",src:"drop"};
+      }
+      if(ov){
+        var t1=parseA(r.acriss),t2=parseA(ov.acriss);
+        var typ=(t1&&t2&&t1.raw===t2.raw)?"exact":"upgrade";
+        return{r:r,d:ov,type:typ,manual:true};
       }
     }
-    // Erst: Autos die zeitlich passen (Drop + 1h vor Pickup)
-    var timedCands=pool.filter(function(d){
-      if(used.has(d.id))return false;
-      if(d.time&&r.time){
-        var dropReady=timeToMin(d.time)+60;
-        var pickupTime=timeToMin(r.time);
-        if(dropReady>pickupTime)return false;
-      }
-      return true;
-    }).map(function(d){return{d,s:score(r.acriss,d.acriss,r.lor)};}).filter(function(x){return x.s>-999;}).sort(function(a,b){return b.s-a.s;});
-
-    // Falls nichts passt: alle verfügbaren nehmen (Kunde muss bedient werden!)
-    var allCands=timedCands.length>0?timedCands:pool.filter(function(d){
-      return !used.has(d.id);
-    }).map(function(d){return{d,s:score(r.acriss,d.acriss,r.lor)};}).filter(function(x){return x.s>-999;}).sort(function(a,b){return b.s-a.s;});
-
-    const cands=allCands;
-    if(!cands.length)return{r,d:null,type:"none"};
-    used.add(cands[0].d.id);
-    const type=parseA(r.acriss)?.raw===parseA(cands[0].d.acriss)?.raw?"exact":"upgrade";
-    return{r,d:cands[0].d,type};
+    /* 1. Versuch: Autos die zeitlich passen (Drop+1h ≤ Pickup) */
+    function candidates(checkTime){
+      return pool.filter(function(p){
+        if(used[p.id])return false;
+        if(checkTime&&p.time&&r.time){
+          var ready=timeToMin(p.time)+60;
+          var pick=timeToMin(r.time);
+          if(ready>=0&&pick>=0&&ready>pick)return false;
+        }
+        return true;
+      }).map(function(p){return{p:p,s:score(r.acriss,p.acriss)};})
+        .filter(function(x){return x.s>-999;})
+        .sort(function(a,b){return b.s-a.s;});
+    }
+    var cands=candidates(true);
+    if(!cands.length)cands=candidates(false);  /* Auslastung: notfalls ohne Zeitcheck */
+    if(!cands.length)return{r:r,d:null,type:"none"};
+    used[cands[0].p.id]=true;
+    var b=parseA(r.acriss),a=parseA(cands[0].p.acriss);
+    var type=(b&&a&&b.raw===a.raw)?"exact":"upgrade";
+    return{r:r,d:cands[0].p,type:type};
   });
 }
 
+function calcDaymin(){
+  var av=state.available.filter(function(a){
+    return PLANBAR_AVAIL.indexOf(parseInt(a.status,10)||0)>=0;
+  }).length;
+  var dr=state.drops.filter(function(d){
+    var s=parseInt(d.status,10)||0;
+    if(PLANBAR_DROP.indexOf(s)<0)return false;
+    if(d.time&&d.time>"14:30")return false;   /* nach 14:30 → erst morgen */
+    return true;
+  }).length;
+  return av+dr-state.resis.length;
+}
+
+/* ============ STATE ============ */
 var state={
+  tab:"plan",
+  drops:[],
+  resis:[],
+  available:[],
   overrides:{},
   changeModal:null,
-  available:[],
-  na:{plate:"",acriss:"",vehicle:"",status:"1"},
-  tab:"plan",
-  drops:[
-    {id:1, time:"",plate:"HH-AD 9342", acriss:"GWAR",vehicle:"Mercedes Benz C-Estate",  lor:"146",status:"0"},
-    {id:2, time:"",plate:"M-KJ 2764",  acriss:"GDAR",vehicle:"BMW SERIES 3",            lor:"50", status:"0"},
-    {id:3, time:"",plate:"M-KS 5188",  acriss:"IFAR",vehicle:"VW T-ROC",                lor:"89", status:"0"},
-    {id:4, time:"",plate:"M-LC 4916",  acriss:"GTAR",vehicle:"BMW SERIES 4 Cabriolet",  lor:"176",status:"0"},
-    {id:5, time:"",plate:"M-IC 2058",  acriss:"UDAR",vehicle:"BMW SERIES 5",            lor:"169",status:"0"},
-    {id:6, time:"",plate:"HH-AD 9589", acriss:"IFAR",vehicle:"VW T-ROC",                lor:"159",status:"0"},
-    {id:7, time:"",plate:"M-LM 4802E", acriss:"IFAC",vehicle:"Skoda Elroq 82kWh",       lor:"–",  status:"0"},
-    {id:8, time:"",plate:"M-HG 3559",  acriss:"CWMR",vehicle:"Opel ASTRA 1.2 Turbo",   lor:"–",  status:"0"},
-    {id:9, time:"",plate:"M-PL 2280",  acriss:"GWAR",vehicle:"Audi A5 TFSI Avant",      lor:"–",  status:"0"},
-    {id:10,time:"",plate:"M-PL 3020",  acriss:"EDMR",vehicle:"Opel CORSA 1.2",          lor:"–",  status:"0"},
-    {id:11,time:"",plate:"SI-QB 1273", acriss:"GFDR",vehicle:"BMW X1 23i xDrive",       lor:"–",  status:"0"},
-    {id:12,time:"",plate:"M-HB 1803",  acriss:"IVAV",vehicle:"VW TOURAN 1.5 TSI",       lor:"–",  status:"0"},
-    {id:13,time:"",plate:"HH-AD 9310", acriss:"GDAR",vehicle:"Mercedes Benz C-CLASS",   lor:"–",  status:"0"},
-  ],
-  resis:[
-    {id:1, time:"07:30",resi:"9733237910",acriss:"CFAR",returnDate:"28.06.",lor:"20",name:"Mettendorf, Jan Oke"},
-    {id:2, time:"08:00",resi:"9735074994",acriss:"CDMR",returnDate:"12.06.",lor:"4", name:"Heselschwerdt, Louis"},
-    {id:3, time:"13:00",resi:"9943783892",acriss:"CDAR",returnDate:"12.06.",lor:"3", name:"Bretschneider, Max"},
-    {id:4, time:"15:00",resi:"9732076458",acriss:"IWAR",returnDate:"16.06.",lor:"7", name:"Eilers, Stephanie"},
-    {id:5, time:"16:00",resi:"9734910267",acriss:"CDAR",returnDate:"13.06.",lor:"4", name:"Vandavasi, Ratna NG"},
-    {id:6, time:"17:00",resi:"9734783495",acriss:"DDAR",returnDate:"10.06.",lor:"2", name:"Laartz, Viona NG"},
-    {id:7, time:"18:30",resi:"9735054728",acriss:"GTAR",returnDate:"13.06.",lor:"4", name:"Bashiri, Reihane BF/LD"},
-  ],
-  apiKey:localStorage.getItem("sixt_api_key")||"",
+  apiKey:"",
   scanning:false,
   toast:"",
-  nd:{time:"",plate:"",acriss:"",vehicle:"",lor:"",status:"1"},
-  nr:{time:"",resi:"",acriss:"",returnDate:"",lor:""}
+  nd:{time:"",plate:"",acriss:"",vehicle:"",lor:"",status:"0"},
+  nr:{time:"",resi:"",acriss:"",returnDate:"",lor:"",name:""},
+  na:{plate:"",acriss:"",vehicle:"",status:"1"}
 };
 
 function saveToStorage(){
@@ -174,46 +177,45 @@ function saveToStorage(){
     localStorage.setItem("fleet_available",JSON.stringify(state.available));
   }catch(e){}
 }
-
 function loadFromStorage(){
   try{
+    state.apiKey=localStorage.getItem("sixt_api_key")||"";
     var d=localStorage.getItem("fleet_drops");
     var r=localStorage.getItem("fleet_resis");
     var o=localStorage.getItem("fleet_overrides");
-    var av=localStorage.getItem("fleet_available");
+    var a=localStorage.getItem("fleet_available");
     if(d)state.drops=JSON.parse(d);
     if(r)state.resis=JSON.parse(r);
     if(o)state.overrides=JSON.parse(o);
-    if(av)state.available=JSON.parse(av);
+    if(a)state.available=JSON.parse(a);
   }catch(e){}
 }
 
-// Load saved data on startup
-loadFromStorage();
-
 var toastTimer=null;
 function showToast(msg,dur){
-  dur=dur||2500;
-  state.toast=msg;
-  render();
+  state.toast=msg;render();
   if(toastTimer)clearTimeout(toastTimer);
-  toastTimer=setTimeout(function(){state.toast="";render();},dur);
+  toastTimer=setTimeout(function(){state.toast="";render();},dur||2500);
 }
 
-async function scanPhoto(file,target){
+/* ============ FOTO-SCAN (Anthropic) ============ */
+function scanPhoto(file){
   if(!state.apiKey){showToast("⚠️ Erst API Key im Key-Tab eingeben!");return;}
   state.scanning=true;render();
   showToast("📸 Foto wird gelesen...",8000);
-  try{
-    var base64=await new Promise(function(res,rej){
-      var r=new FileReader();
-      r.onload=function(){res(r.result.split(",")[1]);};
-      r.onerror=rej;
-      r.readAsDataURL(file);
-    });
-    showToast("🤖 KI analysiert...",8000);
-    var prompt='Analysiere diesen Sixt Lynx Fleet Monitor Screenshot.\nErkenne ob es Drops (Rückgaben), Reservations oder Available (verfügbare Fahrzeuge an der Station) ist.\nGib NUR JSON zurück:\nFür DROPS: {"type":"drops","data":[{"time":"08:00","plate":"M-XX 1234","acriss":"CDAR","vehicle":"VW Golf","lor":"3","status":"0"}]}\nFür RESERVATIONS: {"type":"resis","data":[{"time":"06:00","resi":"9734xxxxxx","acriss":"CDAR","returnDate":"10.06.","lor":"3"}]}\nFür AVAILABLE: {"type":"available","data":[{"plate":"M-XX 1234","acriss":"CDAR","vehicle":"VW Golf","status":"1"}]}\nStatus Available: 1=Vermietbereit, 2=Vermietbereit, 3=Schlüssel nicht abgeholt, 10=Aufbereitung, 11=Aufbereitung\nNur JSON, kein Text!';
-    var res=await fetch("https://api.anthropic.com/v1/messages",{
+  var reader=new FileReader();
+  reader.onerror=function(){state.scanning=false;showToast("❌ Foto konnte nicht gelesen werden",4000);render();};
+  reader.onload=function(){
+    var base64=String(reader.result).split(",")[1];
+    showToast("🤖 KI analysiert...",10000);
+    var prompt='Analysiere diesen Sixt Lynx Fleet Monitor Screenshot.\n'+
+      'Erkenne ob es Drops (Rückgaben mit Return date), Reservations (mit Reservation-Nr und Pickup) oder Available (Bestand an der Station) ist.\n'+
+      'Gib NUR JSON zurück, kein anderer Text:\n'+
+      'DROPS: {"type":"drops","data":[{"time":"08:00","plate":"M-XX 1234","acriss":"CDAR","vehicle":"VW Golf","lor":"3","status":"0"}]}\n'+
+      'RESERVATIONS: {"type":"resis","data":[{"time":"06:00","resi":"9734xxxxxx","acriss":"CDAR","returnDate":"10.06.","lor":"3","name":"Mustermann"}]}\n'+
+      'AVAILABLE: {"type":"available","data":[{"plate":"M-XX 1234","acriss":"CDAR","vehicle":"VW Golf","status":"1"}]}\n'+
+      'time immer als HH:MM. status als String. Bei Available den Vehicle-Status übernehmen (1,2,3,4,9,10,11).';
+    fetch("https://api.anthropic.com/v1/messages",{
       method:"POST",
       headers:{
         "Content-Type":"application/json",
@@ -223,133 +225,114 @@ async function scanPhoto(file,target){
       },
       body:JSON.stringify({
         model:"claude-haiku-4-5-20251001",
-        max_tokens:1000,
+        max_tokens:2000,
         messages:[{role:"user",content:[
           {type:"image",source:{type:"base64",media_type:file.type||"image/jpeg",data:base64}},
           {type:"text",text:prompt}
         ]}]
       })
+    }).then(function(res){
+      return res.json().then(function(data){return{ok:res.ok,status:res.status,data:data};});
+    }).then(function(out){
+      state.scanning=false;
+      if(!out.ok)throw new Error((out.data.error&&out.data.error.message)||("API Fehler "+out.status));
+      if(!out.data.content||!out.data.content[0])throw new Error("Keine KI Antwort");
+      var text=out.data.content[0].text.replace(/```json|```/g,"").trim();
+      var parsed=JSON.parse(text);
+      if(parsed.type==="drops"&&parsed.data&&parsed.data.length){
+        parsed.data.forEach(function(x){state.drops.push({id:Date.now()+Math.random(),time:x.time||"",plate:x.plate||"",acriss:(x.acriss||"").toUpperCase(),vehicle:x.vehicle||"",lor:x.lor||"",status:String(x.status!=null?x.status:"0")});});
+        state.tab="drops";saveToStorage();
+        showToast("✅ "+parsed.data.length+" Drops importiert!");
+      }else if(parsed.type==="resis"&&parsed.data&&parsed.data.length){
+        parsed.data.forEach(function(x){state.resis.push({id:Date.now()+Math.random(),time:x.time||"",resi:x.resi||"",acriss:(x.acriss||"").toUpperCase(),returnDate:x.returnDate||"",lor:x.lor||"",name:x.name||""});});
+        state.tab="resis";saveToStorage();
+        showToast("✅ "+parsed.data.length+" Reservierungen importiert!");
+      }else if(parsed.type==="available"&&parsed.data&&parsed.data.length){
+        parsed.data.forEach(function(x){state.available.push({id:Date.now()+Math.random(),plate:x.plate||"",acriss:(x.acriss||"").toUpperCase(),vehicle:x.vehicle||"",status:String(x.status!=null?x.status:"1")});});
+        state.tab="available";saveToStorage();
+        showToast("✅ "+parsed.data.length+" Available importiert!");
+      }else{
+        showToast("⚠️ Keine Daten erkannt – nochmal versuchen",4000);
+      }
+      render();
+    }).catch(function(e){
+      state.scanning=false;
+      showToast("❌ Fehler: "+e.message,5000);
+      render();
     });
-    var data=await res.json();
-    if(!res.ok)throw new Error((data.error&&data.error.message)||"API Fehler "+res.status);
-    if(!data.content||!data.content[0])throw new Error("Keine KI Antwort");
-    var text=data.content[0].text.replace(/```json|```/g,"").trim();
-    var parsed=JSON.parse(text);
-    state.scanning=false;
-    if(parsed.type==="drops"&&parsed.data&&parsed.data.length){
-      parsed.data.forEach(function(d){state.drops.push(Object.assign({},d,{id:Date.now()+Math.random()}));});
-      state.tab="drops";
-      saveToStorage();
-      showToast("✅ "+parsed.data.length+" Drops importiert!");
-    }else if(parsed.type==="resis"&&parsed.data&&parsed.data.length){
-      parsed.data.forEach(function(d){state.resis.push(Object.assign({},d,{id:Date.now()+Math.random()}));});
-      state.tab="resis";
-      saveToStorage();
-      showToast("✅ "+parsed.data.length+" Reservierungen importiert!");
-    }else if(parsed.type==="available"&&parsed.data&&parsed.data.length){
-      parsed.data.forEach(function(d){state.available.push(Object.assign({},d,{id:Date.now()+Math.random()}));});
-      state.tab="available";
-      saveToStorage();
-      showToast("✅ "+parsed.data.length+" Available Fahrzeuge importiert!");
-    }else{
-      showToast("⚠️ Keine Daten erkannt – nochmal versuchen");
-    }
-    render();
-  }catch(e){
-    state.scanning=false;
-    showToast("❌ Fehler: "+e.message,5000);
-    render();
-  }
+  };
+  reader.readAsDataURL(file);
 }
 
+/* ============ DOM HELPERS ============ */
 function h(tag,attrs,children){
   var el=document.createElement(tag);
-  if(attrs){
-    Object.keys(attrs).forEach(function(k){
-      if(k==="style"){Object.assign(el.style,attrs[k]);}
-      else if(k==="class"){el.className=attrs[k];}
-      else if(k==="html"){el.innerHTML=attrs[k];}
-      else if(typeof attrs[k]==="function"){el.addEventListener(k.replace(/^on/,"").toLowerCase(),attrs[k]);}
-      else{el.setAttribute(k,attrs[k]);}
-    });
-  }
-  if(children){
-    if(!Array.isArray(children))children=[children];
-    children.forEach(function(c){
-      if(c==null||c===false||c===undefined)return;
-      if(typeof c==="string"||typeof c==="number"){el.appendChild(document.createTextNode(String(c)));}
-      else if(c.nodeType){el.appendChild(c);}
+  if(attrs)Object.keys(attrs).forEach(function(k){
+    if(k==="style")Object.assign(el.style,attrs[k]);
+    else if(k==="class")el.className=attrs[k];
+    else el.setAttribute(k,attrs[k]);
+  });
+  if(children!=null){
+    (Array.isArray(children)?children:[children]).forEach(function(c){
+      if(c==null||c===false)return;
+      if(typeof c==="string"||typeof c==="number")el.appendChild(document.createTextNode(String(c)));
+      else el.appendChild(c);
     });
   }
   return el;
 }
 
-function t(text){return document.createTextNode(String(text||""));}
-
-function renderScanButtons(target){
-  var wrap=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"16px"}});
+/* ============ SCAN BUTTONS ============ */
+function renderScanButtons(){
+  var wrap=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"14px"}});
   if(state.scanning){
-    var spinner=h("div",{style:{gridColumn:"span 2",background:"linear-gradient(135deg,#7c3aed,#4f46e5)",borderRadius:"10px",padding:"13px",display:"flex",alignItems:"center",justifyContent:"center",gap:"10px",color:"#fff",fontWeight:"700"}});
-    spinner.innerHTML='<div style="width:18px;height:18px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite"></div> KI analysiert...';
-    wrap.appendChild(spinner);
-  }else{
-    var lbl1=document.createElement("label");
-    lbl1.className="scan-label";
-    lbl1.style.background="linear-gradient(135deg,#7c3aed,#4f46e5)";
-    lbl1.innerHTML='<span style="font-size:18px">📸</span><span>Kamera</span>';
-    var inp1=document.createElement("input");
-    inp1.type="file";inp1.accept="image/*";inp1.setAttribute("capture","environment");
-    inp1.addEventListener("change",function(){if(this.files&&this.files[0])scanPhoto(this.files[0],target);});
-    lbl1.appendChild(inp1);
-    wrap.appendChild(lbl1);
-
-    var lbl2=document.createElement("label");
-    lbl2.className="scan-label";
-    lbl2.style.background="linear-gradient(135deg,#0d9488,#0f766e)";
-    lbl2.innerHTML='<span style="font-size:18px">🖼️</span><span>Galerie</span>';
-    var inp2=document.createElement("input");
-    inp2.type="file";inp2.accept="image/*";
-    inp2.addEventListener("change",function(){if(this.files&&this.files[0])scanPhoto(this.files[0],target);});
-    lbl2.appendChild(inp2);
-    wrap.appendChild(lbl2);
+    var sp=h("div",{style:{gridColumn:"span 2",background:"linear-gradient(135deg,#7c3aed,#4f46e5)",borderRadius:"10px",padding:"13px",display:"flex",alignItems:"center",justifyContent:"center",gap:"10px",color:"#fff",fontWeight:"700"}});
+    sp.appendChild(h("div",{class:"spinner"}));
+    sp.appendChild(document.createTextNode("KI analysiert..."));
+    wrap.appendChild(sp);
+    return wrap;
   }
-  if(!state.apiKey){
-    wrap.appendChild(h("div",{style:{gridColumn:"span 2",fontSize:"11px",color:"#f87171",textAlign:"center",marginTop:"4px"}},"⚠️ API Key fehlt → Tab Key öffnen"));
+  function makeLabel(bg,icon,text,capture){
+    var lbl=h("label",{class:"scan-label",style:{background:bg}});
+    lbl.appendChild(h("span",{style:{fontSize:"18px"}},icon));
+    lbl.appendChild(h("span",{},text));
+    var inp=document.createElement("input");
+    inp.type="file";inp.accept="image/*";
+    if(capture)inp.setAttribute("capture","environment");
+    inp.addEventListener("change",function(){
+      if(this.files&&this.files[0])scanPhoto(this.files[0]);
+      this.value="";
+    });
+    lbl.appendChild(inp);
+    return lbl;
   }
+  wrap.appendChild(makeLabel("linear-gradient(135deg,#7c3aed,#4f46e5)","📸","Kamera",true));
+  wrap.appendChild(makeLabel("linear-gradient(135deg,#0d9488,#0f766e)","🖼️","Galerie",false));
+  if(!state.apiKey)wrap.appendChild(h("div",{style:{gridColumn:"span 2",fontSize:"11px",color:"#f87171",textAlign:"center"}},"⚠️ API Key fehlt → Key-Tab öffnen"));
   return wrap;
 }
 
+/* ============ PLAN TAB ============ */
 function renderPlan(){
-  var matches=autoMatch(state.drops,state.resis);
+  var wrap=document.createDocumentFragment();
+  wrap.appendChild(renderScanButtons());
+
+  var matches=autoMatch();
   var exact=matches.filter(function(m){return m.type==="exact";}).length;
   var upgrade=matches.filter(function(m){return m.type==="upgrade";}).length;
   var none=matches.filter(function(m){return m.type==="none";}).length;
-  // Daymin: nur Autos die HEUTE verfügbar sind
-  // - Status 1/2 (sofort vermietbereit)
-  // - Status 10/11 (in Aufbereitung)
-  // - Drops VOR 14:30 (können noch heute aufbereitet werden)
-  // NICHT gezählt: Drops NACH 14:30 (erst morgen verfügbar)
-  var availCount=state.drops.filter(function(d){
-    var s=parseInt(d.status)||0;
-    var statusOk=s===1||s===2||s===10||s===11;
-    var hasTime=d.time&&d.time.length>0;
-    var before1430=hasTime&&d.time<="14:30";
-    var noTime=!hasTime;
-    // Status 1/2/10/11 = bereits an Station → zählt immer
-    // Drop mit Zeit: nur wenn vor 14:30
-    // Drop ohne Zeit: zählt (bereits verfügbar)
-    return statusOk||(noTime&&(s===0))||(hasTime&&before1430&&s===0);
-  }).length;
-  var daymin=availCount-state.resis.length;
-  var wrap=document.createDocumentFragment();
-  wrap.appendChild(renderScanButtons("drops"));
+  var daymin=calcDaymin();
 
-  // KPIs
-  var kpis=h("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"8px",marginBottom:"16px"}});
-  [{l:"Total",v:matches.length,c:"#818cf8",i:"📊"},{l:"Exakt",v:exact,c:"#4ade80",i:"✅"},{l:"Upgrade",v:upgrade,c:"#facc15",i:"⬆️"},{l:"Fehlt",v:none,c:"#f87171",i:"🚨"}].forEach(function(k){
+  var kpis=h("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"8px",marginBottom:"14px"}});
+  [
+    {l:"Daymin",v:(daymin>=0?"+":"")+daymin,c:daymin>0?"#4ade80":(daymin<0?"#f87171":"#facc15"),i:daymin>0?"📈":(daymin<0?"📉":"➖")},
+    {l:"Exakt",v:exact,c:"#4ade80",i:"✅"},
+    {l:"Upgrade",v:upgrade,c:"#facc15",i:"⬆️"},
+    {l:"Fehlt",v:none,c:"#f87171",i:"🚨"}
+  ].forEach(function(k){
     var kd=h("div",{style:{background:"#131325",border:"1px solid "+k.c+"33",borderRadius:"10px",padding:"10px 4px",textAlign:"center"}});
     kd.appendChild(h("div",{style:{fontSize:"14px"}},k.i));
-    kd.appendChild(h("div",{style:{fontSize:"20px",fontWeight:"700",color:k.c,fontFamily:"monospace"}},k.v));
+    kd.appendChild(h("div",{style:{fontSize:"20px",fontWeight:"700",color:k.c,fontFamily:"monospace"}},String(k.v)));
     kd.appendChild(h("div",{style:{fontSize:"9px",color:"#666",textTransform:"uppercase"}},k.l));
     kpis.appendChild(kd);
   });
@@ -357,258 +340,106 @@ function renderPlan(){
 
   matches.forEach(function(m){
     var ba=parseA(m.r.acriss),da=m.d?parseA(m.d.acriss):null;
-    var sc=m.type==="exact"?{lbl:"✅ Exakt",bg:"#dcfce7",bdr:"#16a34a",txt:"#15803d"}:m.type==="upgrade"?{lbl:"⬆️ Upgrade",bg:"#fef9c3",bdr:"#ca8a04",txt:"#78350f"}:{lbl:"🚨 Kein Auto",bg:"#fee2e2",bdr:"#dc2626",txt:"#991b1b"};
-    var card=h("div",{class:"card",style:{borderLeft:"3px solid "+sc.bdr,marginBottom:"10px"}});
-    var top=h("div",{style:{display:"flex",alignItems:"center",gap:"8px",marginBottom:"10px"}});
-    top.appendChild(h("div",{style:{background:"#0d0d1a",borderRadius:"7px",padding:"5px 9px",fontFamily:"monospace",fontSize:"14px",fontWeight:"700",color:O}},m.r.time));
+    var sc=m.type==="exact"?{lbl:"✅ Exakt",bdr:"#16a34a",bg:"#dcfce7",txt:"#15803d"}
+        :m.type==="upgrade"?{lbl:"⬆️ Upgrade",bdr:"#ca8a04",bg:"#fef9c3",txt:"#78350f"}
+        :{lbl:"🚨 Kein Auto",bdr:"#dc2626",bg:"#fee2e2",txt:"#991b1b"};
+    var card=h("div",{class:"card",style:{borderLeft:"3px solid "+sc.bdr}});
+
+    var top=h("div",{style:{display:"flex",alignItems:"center",gap:"8px",marginBottom:"10px",flexWrap:"wrap"}});
+    top.appendChild(h("div",{style:{background:"#0d0d1a",borderRadius:"7px",padding:"5px 9px",fontFamily:"monospace",fontSize:"14px",fontWeight:"700",color:"#FF6600"}},m.r.time||"–"));
     top.appendChild(h("div",{style:{flex:"1",fontSize:"10px",color:"#666",fontFamily:"monospace"}},m.r.resi||""));
-    var badge=h("span",{style:{background:sc.bg,color:sc.txt,border:"1px solid "+sc.bdr,borderRadius:"20px",padding:"3px 8px",fontSize:"10px",fontWeight:"700"}},sc.lbl);
-    top.appendChild(badge);
+    top.appendChild(h("span",{style:{background:sc.bg,color:sc.txt,border:"1px solid "+sc.bdr,borderRadius:"20px",padding:"3px 8px",fontSize:"10px",fontWeight:"700"}},sc.lbl));
     card.appendChild(top);
 
     var grid=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 20px 1fr",gap:"6px",alignItems:"center"}});
     var left=h("div",{style:{background:"#0d0d1a",borderRadius:"8px",padding:"10px"}});
     left.appendChild(h("div",{style:{fontSize:"9px",color:"#555",textTransform:"uppercase",marginBottom:"3px"}},"Gebucht"));
-    left.appendChild(h("div",{style:{fontFamily:"monospace",fontSize:"17px",fontWeight:"700",color:"#818cf8"}},m.r.acriss));
-    left.appendChild(h("div",{style:{fontSize:"10px",color:"#888"}},ba?ba.catLabel:"–"));
-    left.appendChild(h("div",{style:{fontSize:"9px",color:"#666"}},ba?ba.bodyLabel+" · "+ba.transLabel:"–"));
+    left.appendChild(h("div",{style:{fontFamily:"monospace",fontSize:"17px",fontWeight:"700",color:"#818cf8"}},m.r.acriss||"–"));
+    if(ba){
+      left.appendChild(h("div",{style:{fontSize:"10px",color:"#888"}},ba.catLabel));
+      left.appendChild(h("div",{style:{fontSize:"9px",color:"#666"}},ba.bodyLabel+" · "+ba.transLabel));
+    }
     grid.appendChild(left);
     grid.appendChild(h("div",{style:{textAlign:"center",color:"#333",fontSize:"16px"}},"→"));
     var right=h("div",{style:{background:"#0d0d1a",borderRadius:"8px",padding:"10px"}});
     right.appendChild(h("div",{style:{fontSize:"9px",color:"#555",textTransform:"uppercase",marginBottom:"3px"}},"Zugeteilt"));
     if(m.d){
       right.appendChild(h("div",{style:{fontFamily:"monospace",fontSize:"17px",fontWeight:"700",color:"#fff"}},m.d.acriss));
-      right.appendChild(h("div",{style:{fontSize:"10px",color:"#ccc"}},m.d.vehicle));
-      right.appendChild(h("div",{style:{fontSize:"9px",color:"#666",fontFamily:"monospace"}},m.d.plate));
+      right.appendChild(h("div",{style:{fontSize:"10px",color:"#ccc"}},m.d.vehicle||""));
+      right.appendChild(h("div",{style:{fontSize:"9px",color:"#666",fontFamily:"monospace"}},(m.d.plate||"")+(m.d.time?" · Drop "+m.d.time:"")));
     }else{
       right.appendChild(h("div",{style:{color:"#f87171",fontWeight:"700",fontSize:"12px",paddingTop:"4px"}},"Kein Auto!"));
     }
     grid.appendChild(right);
     card.appendChild(grid);
-    if(m.d&&ba&&da&&!ba.isAuto&&!da.isAuto)card.appendChild(h("div",{style:{marginTop:"8px",fontSize:"11px",color:"#4ade80",background:"#052e16",borderRadius:"6px",padding:"4px 8px",display:"inline-block"}},"✅ Manual → Manual"));
-    if(m.d&&ba&&da&&!ba.isAuto&&da.isAuto)card.appendChild(h("div",{style:{marginTop:"8px",fontSize:"11px",color:"#60a5fa",background:"#0c1a2e",borderRadius:"6px",padding:"4px 8px",display:"inline-block"}},"⬆️ Manual → Auto Fallback"));
+
+    if(m.d&&ba&&da){
+      if(!ba.isAuto&&!da.isAuto)card.appendChild(h("div",{style:{marginTop:"8px",fontSize:"11px",color:"#4ade80",background:"#052e16",borderRadius:"6px",padding:"4px 8px",display:"inline-block"}},"✅ Manual → Manual"));
+      if(!ba.isAuto&&da.isAuto)card.appendChild(h("div",{style:{marginTop:"8px",fontSize:"11px",color:"#60a5fa",background:"#0c1a2e",borderRadius:"6px",padding:"4px 8px",display:"inline-block",marginLeft:"4px"}},"⬆️ Manual → Auto Fallback"));
+      if(m.d.time&&m.r.time&&timeToMin(m.d.time)+60>timeToMin(m.r.time))
+        card.appendChild(h("div",{style:{marginTop:"8px",fontSize:"11px",color:"#fbbf24",background:"#451a03",borderRadius:"6px",padding:"4px 8px"}},"⏰ Achtung: Drop "+m.d.time+" + 1h Aufbereitung ist NACH Pickup "+m.r.time+"!"));
+    }
     if(m.type==="none")card.appendChild(h("div",{style:{marginTop:"8px",fontSize:"11px",color:"#fca5a5",background:"#450a0a",borderRadius:"6px",padding:"5px 8px"}},"🚨 Nachbarstation kontaktieren!"));
 
-    // Change button
-    var footer=h("div",{style:{marginTop:"10px",display:"flex",gap:"8px",alignItems:"center"}});
-    if(m.manual){
-      footer.appendChild(h("span",{style:{fontSize:"10px",color:"#f59e0b",background:"#451a03",borderRadius:"6px",padding:"3px 8px"}},"✏️ Manuell geändert"));
-    }
-    var changeBtn=h("button",{style:{background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",borderRadius:"7px",padding:"5px 12px",fontSize:"11px",cursor:"pointer",marginLeft:"auto"}},m.d?"✏️ Ändern":"➕ Zuteilen");
-    (function(match){
-      changeBtn.addEventListener("click",function(){
-        state.changeModal={resiId:match.r.id,resi:match.r};
-        render();
-      });
-    })(m);
-    footer.appendChild(changeBtn);
-    card.appendChild(footer);
+    var foot=h("div",{style:{marginTop:"10px",display:"flex",gap:"8px",alignItems:"center"}});
+    foot.appendChild(h("div",{style:{fontSize:"10px",color:"#555",flex:"1"}},"LOR "+(m.r.lor||"–")+"T · bis "+(m.r.returnDate||"–")+(m.r.name?" · "+m.r.name:"")));
+    if(m.manual)foot.appendChild(h("span",{style:{fontSize:"10px",color:"#f59e0b",background:"#451a03",borderRadius:"6px",padding:"3px 8px"}},"✏️ Manuell"));
+    var chg=h("button",{style:{background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",borderRadius:"7px",padding:"5px 12px",fontSize:"11px",cursor:"pointer"}},m.d?"✏️ Ändern":"➕ Zuteilen");
+    (function(match){chg.addEventListener("click",function(){state.changeModal={resiId:match.r.id,resi:match.r};render();});})(m);
+    foot.appendChild(chg);
+    card.appendChild(foot);
     wrap.appendChild(card);
   });
 
-  var rules=h("div",{style:{background:"#1a0a00",border:"1px solid #FF660044",borderRadius:"12px",padding:"12px"}});
-  rules.appendChild(h("div",{style:{fontWeight:"700",color:O,marginBottom:"8px",fontSize:"12px"}},"🚨 Regeln"));
-  ["Manual + Manual → Manual geben ✅","Manual + kein Manual → Auto Fallback ⬆️","Automatik → NUR Automatik ❌","Kein Downgrade ❌","Status 3 = nicht anfassen 🔒","Status 4 = Aufbereitung ⏳","Status 5/6 = kaputt 🔧"].forEach(function(r){
+  var rules=h("div",{style:{background:"#1a0a00",border:"1px solid #FF660044",borderRadius:"12px",padding:"12px",marginTop:"4px"}});
+  rules.appendChild(h("div",{style:{fontWeight:"700",color:"#FF6600",marginBottom:"8px",fontSize:"12px"}},"🚨 Regeln"));
+  ["Volle Auslastung – jeder Kunde bekommt ein Auto","Manual + Manual verfügbar → Manual ✅","Automatik → NUR Automatik ❌","Kein Downgrade ❌","Verbrenner-Kunde → kein Elektro ❌","Elektro nur an Elektro-Kunden 🔋","Cabrio über C-Klasse nur an Cabrio-Buchung 🚗","Avail Status 3 = nicht im Bestand 🔒","Drop nach 14:30 → Folgetag ⏰","Drop + 1h Aufbereitung vor Pickup ⏳"].forEach(function(r){
     rules.appendChild(h("div",{style:{fontSize:"11px",color:"#ccc",padding:"3px 0",borderBottom:"1px solid #2a1500"}},r));
   });
   wrap.appendChild(rules);
   return wrap;
 }
 
-function renderDrops(){
+/* ============ AVAILABLE TAB ============ */
+function renderAvailable(){
   var wrap=document.createDocumentFragment();
   wrap.appendChild(renderScanButtons());
-  var nd=state.nd;
-  var form=h("div",{class:"card",style:{border:"1px solid #2a2a45"}});
-  form.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:O,marginBottom:"10px"}},"+ Drop manuell hinzufügen"));
-  var grid=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"10px"}});
 
-  function inp(lbl,type,placeholder,val,onchange){
-    var d=h("div",{});
-    d.appendChild(h("div",{style:{fontSize:"10px",color:"#888",marginBottom:"4px",textTransform:"uppercase"}},lbl));
-    var i=h("input",{class:"inp",type:type,placeholder:placeholder,value:val||""});
-    i.addEventListener("input",onchange);
-    d.appendChild(i);return d;
-  }
-
-  grid.appendChild(inp("Uhrzeit","time","",nd.time,function(e){state.nd.time=e.target.value;}));
-  grid.appendChild(inp("Kennzeichen","text","M-XX 1234",nd.plate,function(e){state.nd.plate=e.target.value.toUpperCase();}));
-
-  var acDiv=h("div",{});
-  acDiv.appendChild(h("div",{style:{fontSize:"10px",color:"#888",marginBottom:"4px",textTransform:"uppercase"}},"ACRISS"));
-  var acInp=h("input",{class:"inp",placeholder:"CDAR",maxlength:"4",value:nd.acriss||"",style:{textTransform:"uppercase",fontFamily:"monospace",letterSpacing:"2px",color:nd.acriss&&nd.acriss.length===4?"#4ade80":"#fff"}});
-  acInp.addEventListener("input",function(e){state.nd.acriss=e.target.value.toUpperCase().slice(0,4);render();});
-  acDiv.appendChild(acInp);
-  if(nd.acriss&&nd.acriss.length===4){var p=parseA(nd.acriss);if(p)acDiv.appendChild(h("div",{style:{fontSize:"9px",color:"#4ade80",marginTop:"2px"}},p.catLabel+" · "+p.bodyLabel+" · "+p.transLabel));}
-  grid.appendChild(acDiv);
-
-  grid.appendChild(inp("Fahrzeug","text","VW Golf",nd.vehicle,function(e){state.nd.vehicle=e.target.value;}));
-  grid.appendChild(inp("LOR","number","3",nd.lor,function(e){state.nd.lor=e.target.value;}));
-
-  var stDiv=h("div",{});
-  stDiv.appendChild(h("div",{style:{fontSize:"10px",color:"#888",marginBottom:"4px",textTransform:"uppercase"}},"Status"));
-  var sel=h("select",{class:"inp"});
-  [["0","0 – Verfügbar"],["3","3 – Reserviert"],["4","4 – Aufbereitung"],["5","5 – Kaputt"]].forEach(function(o){
-    var opt=h("option",{value:o[0]},o[1]);
-    if(nd.status===o[0])opt.setAttribute("selected","selected");
-    sel.appendChild(opt);
-  });
-  sel.addEventListener("change",function(e){state.nd.status=e.target.value;});
-  stDiv.appendChild(sel);grid.appendChild(stDiv);
-  form.appendChild(grid);
-
-  var addBtn=h("button",{class:"btn"},"+ Hinzufügen");
-  addBtn.addEventListener("click",function(){
-    if(!state.nd.acriss||!state.nd.plate){showToast("⚠️ ACRISS + Kennzeichen nötig");return;}
-    state.drops.push(Object.assign({},state.nd,{id:Date.now()}));
-    state.nd={time:"",plate:"",acriss:"",vehicle:"",lor:"",status:"0"};
-    showToast("✅ Drop hinzugefügt");render();
-  });
-  form.appendChild(addBtn);
-  wrap.appendChild(form);
-
-  var hdr=h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}});
-  hdr.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:"#888"}},"Drops ("+state.drops.length+")"));
-  var clrBtn=h("button",{style:{background:"#2a1515",border:"1px solid #dc2626",color:"#f87171",borderRadius:"6px",padding:"4px 10px",fontSize:"11px",cursor:"pointer"}},"Alle löschen");
-  clrBtn.addEventListener("click",function(){if(confirm("Alle Drops löschen?")){state.drops=[];saveToStorage();render();}});
-  hdr.appendChild(clrBtn);wrap.appendChild(hdr);
-
-  state.drops.forEach(function(d){
-    var s=STATUS[d.status]||STATUS["0"];var p=parseA(d.acriss);
-    var card=h("div",{class:"card"});
-    var row=h("div",{style:{display:"flex",alignItems:"center",gap:"8px"}});
-    row.appendChild(h("div",{style:{fontFamily:"monospace",fontSize:"13px",fontWeight:"700",color:O,minWidth:"48px"}},d.time||"–"));
-    var info=h("div",{style:{flex:"1"}});
-    info.appendChild(h("div",{style:{fontFamily:"monospace",fontSize:"15px",fontWeight:"700",color:"#818cf8"}},d.acriss));
-    info.appendChild(h("div",{style:{fontSize:"12px",color:"#ccc"}},d.vehicle));
-    info.appendChild(h("div",{style:{fontSize:"10px",color:"#666",fontFamily:"monospace"}},d.plate+" · LOR "+d.lor));
-    row.appendChild(info);
-    var right=h("div",{style:{textAlign:"right"}});
-    var badge=h("div",{style:{background:s.bg,color:s.color,border:"1px solid "+s.color,borderRadius:"20px",padding:"2px 8px",fontSize:"10px",fontWeight:"700",marginBottom:"4px"}},s.icon+" "+s.label);
-    right.appendChild(badge);
-    var del=h("button",{class:"del"},"×");
-    var did=d.id;
-    del.addEventListener("click",function(){state.drops=state.drops.filter(function(x){return x.id!==did;});saveToStorage();showToast("🗑 Gelöscht");render();});
-    right.appendChild(del);row.appendChild(right);card.appendChild(row);
-    if(p)card.appendChild(h("div",{style:{marginTop:"4px",fontSize:"10px",color:"#555"}},p.catLabel+" · "+p.bodyLabel+" · "+p.transLabel));
-    wrap.appendChild(card);
-  });
-  return wrap;
-}
-
-function renderResis(){
-  var wrap=document.createDocumentFragment();
-  wrap.appendChild(renderScanButtons("resis"));
-  var nr=state.nr;
-  var form=h("div",{class:"card",style:{border:"1px solid #2a2a45"}});
-  form.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:O,marginBottom:"10px"}},"+ Reservierung manuell"));
-  var grid=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"10px"}});
-
-  function inp(lbl,type,placeholder,val,onchange){
-    var d=h("div",{});
-    d.appendChild(h("div",{style:{fontSize:"10px",color:"#888",marginBottom:"4px",textTransform:"uppercase"}},lbl));
-    var i=h("input",{class:"inp",type:type,placeholder:placeholder,value:val||""});
-    i.addEventListener("input",onchange);d.appendChild(i);return d;
-  }
-
-  grid.appendChild(inp("Pickup Zeit","time","",nr.time,function(e){state.nr.time=e.target.value;}));
-  grid.appendChild(inp("Resi-Nr.","text","9734xxxxxx",nr.resi,function(e){state.nr.resi=e.target.value;}));
-
-  var acDiv=h("div",{});
-  acDiv.appendChild(h("div",{style:{fontSize:"10px",color:"#888",marginBottom:"4px",textTransform:"uppercase"}},"ACRISS"));
-  var acInp=h("input",{class:"inp",placeholder:"CDAR",maxlength:"4",value:nr.acriss||"",style:{textTransform:"uppercase",fontFamily:"monospace",letterSpacing:"2px",color:nr.acriss&&nr.acriss.length===4?"#4ade80":"#fff"}});
-  acInp.addEventListener("input",function(e){state.nr.acriss=e.target.value.toUpperCase().slice(0,4);render();});
-  acDiv.appendChild(acInp);
-  if(nr.acriss&&nr.acriss.length===4){var p=parseA(nr.acriss);if(p)acDiv.appendChild(h("div",{style:{fontSize:"9px",color:"#4ade80",marginTop:"2px"}},p.catLabel+" · "+p.bodyLabel+" · "+p.transLabel));}
-  grid.appendChild(acDiv);
-
-  grid.appendChild(inp("Rückgabe","text","12.06.",nr.returnDate,function(e){state.nr.returnDate=e.target.value;}));
-  var lorDiv=h("div",{style:{gridColumn:"span 2"}});
-  lorDiv.appendChild(h("div",{style:{fontSize:"10px",color:"#888",marginBottom:"4px",textTransform:"uppercase"}},"LOR (Tage)"));
-  var lorInp=h("input",{class:"inp",type:"number",placeholder:"4",value:nr.lor||""});
-  lorInp.addEventListener("input",function(e){state.nr.lor=e.target.value;});
-  lorDiv.appendChild(lorInp);grid.appendChild(lorDiv);
-  form.appendChild(grid);
-
-  var addBtn=h("button",{class:"btn"},"+ Hinzufügen");
-  addBtn.addEventListener("click",function(){
-    if(!state.nr.acriss||!state.nr.resi){showToast("⚠️ ACRISS + Resi-Nr. nötig");return;}
-    state.resis.push(Object.assign({},state.nr,{id:Date.now()}));
-    state.nr={time:"",resi:"",acriss:"",returnDate:"",lor:""};
-    showToast("✅ Reservierung hinzugefügt");render();
-  });
-  form.appendChild(addBtn);wrap.appendChild(form);
-
-  var hdr=h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}});
-  hdr.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:"#888"}},"Reservierungen ("+state.resis.length+")"));
-  var clrBtn=h("button",{style:{background:"#2a1515",border:"1px solid #dc2626",color:"#f87171",borderRadius:"6px",padding:"4px 10px",fontSize:"11px",cursor:"pointer"}},"Alle löschen");
-  clrBtn.addEventListener("click",function(){if(confirm("Alle Resis löschen?")){state.resis=[];saveToStorage();render();}});
-  hdr.appendChild(clrBtn);wrap.appendChild(hdr);
-
-  state.resis.forEach(function(r){
-    var p=parseA(r.acriss);
-    var card=h("div",{class:"card"});
-    var row=h("div",{style:{display:"flex",alignItems:"center",gap:"8px"}});
-    row.appendChild(h("div",{style:{fontFamily:"monospace",fontSize:"13px",fontWeight:"700",color:O,minWidth:"48px"}},r.time||"–"));
-    var info=h("div",{style:{flex:"1"}});
-    info.appendChild(h("div",{style:{fontFamily:"monospace",fontSize:"15px",fontWeight:"700",color:"#818cf8"}},r.acriss));
-    info.appendChild(h("div",{style:{fontSize:"11px",color:"#888",fontFamily:"monospace"}},r.resi));
-    info.appendChild(h("div",{style:{fontSize:"10px",color:"#666"}},"bis "+(r.returnDate||"–")+" · LOR "+r.lor+"T"));
-    row.appendChild(info);
-    var del=h("button",{class:"del"},"×");
-    var rid=r.id;
-    del.addEventListener("click",function(){state.resis=state.resis.filter(function(x){return x.id!==rid;});saveToStorage();showToast("🗑 Gelöscht");render();});
-    row.appendChild(del);card.appendChild(row);
-    if(p)card.appendChild(h("div",{style:{marginTop:"4px",fontSize:"10px",color:"#555"}},p.catLabel+" · "+p.bodyLabel+" · "+p.transLabel));
-    wrap.appendChild(card);
-  });
-  return wrap;
-}
-
-function renderAvailable(){
-  var na=state.na;
-  var wrap=document.createDocumentFragment();
-
-  // Scan buttons
-  wrap.appendChild(renderScanButtons("available"));
-
-  // Info box
   var info=h("div",{style:{background:"#0a1a0a",border:"1px solid #16a34a44",borderRadius:"10px",padding:"10px 12px",marginBottom:"12px",fontSize:"11px",color:"#86efac"}});
-  info.appendChild(h("div",{style:{fontWeight:"700",color:"#4ade80",marginBottom:"4px"}},"🅿️ Available – Fahrzeuge an der Station"));
-  info.appendChild(h("div",{},"Nur Status 1 und 2 werden verplant. Status 3 (Schlüssel nicht abgeholt) wird automatisch ausgeschlossen."));
+  info.appendChild(h("div",{style:{fontWeight:"700",color:"#4ade80",marginBottom:"4px"}},"🅿️ Available – Bestand an der Station"));
+  info.appendChild(h("div",{},"Status 1/2/4/9/10/11 wird verplant. Status 3 = nicht im Bestand, wird ignoriert."));
   wrap.appendChild(info);
 
-  // Form
+  var na=state.na;
   var form=h("div",{class:"card",style:{border:"1px solid #2a2a45"}});
-  form.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:"#FF6600",marginBottom:"10px"}},"+ Available Fahrzeug hinzufügen"));
+  form.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:"#FF6600",marginBottom:"10px"}},"+ Fahrzeug hinzufügen"));
   var grid=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"10px"}});
 
-  var p1=h("div",{});p1.appendChild(h("div",{style:{fontSize:"10px",color:"#888",marginBottom:"4px",textTransform:"uppercase"}},"Kennzeichen"));
+  function field(lbl,node){var d=h("div",{});d.appendChild(h("div",{style:{fontSize:"10px",color:"#888",marginBottom:"4px",textTransform:"uppercase"}},lbl));d.appendChild(node);return d;}
+
   var i1=h("input",{class:"inp",placeholder:"M-XX 1234",value:na.plate||""});
   i1.addEventListener("input",function(e){state.na.plate=e.target.value.toUpperCase();});
-  p1.appendChild(i1);grid.appendChild(p1);
+  grid.appendChild(field("Kennzeichen",i1));
 
-  var p2=h("div",{});p2.appendChild(h("div",{style:{fontSize:"10px",color:"#888",marginBottom:"4px",textTransform:"uppercase"}},"ACRISS"));
-  var i2=h("input",{class:"inp",placeholder:"CDAR",maxlength:"4",value:na.acriss||"",style:{textTransform:"uppercase",fontFamily:"monospace",letterSpacing:"2px",color:na.acriss&&na.acriss.length===4?"#4ade80":"#fff"}});
+  var acWrap=h("div",{});
+  var i2=h("input",{class:"inp",placeholder:"CDAR",maxlength:"4",value:na.acriss||"",style:{textTransform:"uppercase",fontFamily:"monospace",letterSpacing:"2px"}});
   i2.addEventListener("input",function(e){state.na.acriss=e.target.value.toUpperCase().slice(0,4);render();});
-  p2.appendChild(i2);
-  if(na.acriss&&na.acriss.length===4){var pa=parseA(na.acriss);if(pa)p2.appendChild(h("div",{style:{fontSize:"9px",color:"#4ade80",marginTop:"2px"}},pa.catLabel+" · "+pa.bodyLabel+" · "+pa.transLabel));}
-  grid.appendChild(p2);
+  acWrap.appendChild(i2);
+  if(na.acriss&&na.acriss.length===4){var pa=parseA(na.acriss);if(pa)acWrap.appendChild(h("div",{style:{fontSize:"9px",color:"#4ade80",marginTop:"2px"}},pa.catLabel+" · "+pa.bodyLabel+" · "+pa.transLabel));}
+  grid.appendChild(field("ACRISS",acWrap));
 
-  var p3=h("div",{});p3.appendChild(h("div",{style:{fontSize:"10px",color:"#888",marginBottom:"4px",textTransform:"uppercase"}},"Fahrzeug"));
   var i3=h("input",{class:"inp",placeholder:"VW Golf",value:na.vehicle||""});
   i3.addEventListener("input",function(e){state.na.vehicle=e.target.value;});
-  p3.appendChild(i3);grid.appendChild(p3);
+  grid.appendChild(field("Fahrzeug",i3));
 
-  var p4=h("div",{});p4.appendChild(h("div",{style:{fontSize:"10px",color:"#888",marginBottom:"4px",textTransform:"uppercase"}},"Status"));
   var sel=h("select",{class:"inp"});
-  [["1","1 – Vermietbereit ✅"],["2","2 – Vermietbereit ✅"],["3","3 – Schlüssel offen 🔒"],["10","10 – Aufbereitung ⏳"],["11","11 – Aufbereitung ⏳"],["5","5 – Kaputt ❌"]].forEach(function(o){
+  [["1","1 – Vermietbereit ✅"],["2","2 – Vermietbereit ✅"],["3","3 – Nicht im Bestand 🔒"],["4","4 – Verfügbar ✅"],["9","9 – Verfügbar ✅"],["10","10 – Aufbereitung ⏳"],["11","11 – Aufbereitung ⏳"],["5","5 – Kaputt ❌"]].forEach(function(o){
     var opt=h("option",{value:o[0]},o[1]);
     if(na.status===o[0])opt.setAttribute("selected","selected");
     sel.appendChild(opt);
   });
   sel.addEventListener("change",function(e){state.na.status=e.target.value;});
-  p4.appendChild(sel);grid.appendChild(p4);
+  grid.appendChild(field("Status",sel));
   form.appendChild(grid);
 
   var addBtn=h("button",{class:"btn"},"+ Hinzufügen");
@@ -618,34 +449,31 @@ function renderAvailable(){
     state.na={plate:"",acriss:"",vehicle:"",status:"1"};
     saveToStorage();showToast("✅ Hinzugefügt");render();
   });
-  form.appendChild(addBtn);wrap.appendChild(form);
+  form.appendChild(addBtn);
+  wrap.appendChild(form);
 
-  // List header
-  var hdrRow=h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}});
-  hdrRow.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:"#888"}},"Available ("+state.available.length+")"));
-  var clrBtn=h("button",{style:{background:"#2a1515",border:"1px solid #dc2626",color:"#f87171",borderRadius:"6px",padding:"4px 10px",fontSize:"11px",cursor:"pointer"}},"Alle löschen");
-  clrBtn.addEventListener("click",function(){if(confirm("Alle Available löschen?")){state.available=[];saveToStorage();render();}});
-  hdrRow.appendChild(clrBtn);wrap.appendChild(hdrRow);
+  var hdr=h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}});
+  hdr.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:"#888"}},"Available ("+state.available.length+")"));
+  var clr=h("button",{class:"del"},"Alle löschen");
+  clr.addEventListener("click",function(){if(confirm("Alle Available löschen?")){state.available=[];saveToStorage();render();}});
+  hdr.appendChild(clr);wrap.appendChild(hdr);
 
   state.available.forEach(function(av){
     var s=STATUS[av.status]||STATUS["1"];
     var p=parseA(av.acriss);
     var blocked=av.status==="3"||av.status==="5"||av.status==="6";
-    var bg=blocked?"#1a0a0a":"#131325";
-    var card=h("div",{style:{background:bg,borderRadius:"10px",padding:"12px",marginBottom:"8px",border:"1px solid "+(blocked?"#dc262644":"#1f1f35")}});
+    var card=h("div",{style:{background:blocked?"#1a0a0a":"#131325",borderRadius:"10px",padding:"12px",marginBottom:"8px",border:"1px solid "+(blocked?"#dc262644":"#1f1f35"),opacity:blocked?"0.8":"1"}});
     var row=h("div",{style:{display:"flex",alignItems:"center",gap:"8px"}});
-    var info=h("div",{style:{flex:"1"}});
-    info.appendChild(h("div",{style:{fontFamily:"monospace",fontSize:"15px",fontWeight:"700",color:blocked?"#f87171":"#818cf8"}},av.acriss));
-    info.appendChild(h("div",{style:{fontSize:"12px",color:"#ccc"}},av.vehicle));
-    info.appendChild(h("div",{style:{fontSize:"10px",color:"#666",fontFamily:"monospace"}},av.plate));
-    if(blocked)info.appendChild(h("div",{style:{fontSize:"10px",color:"#f87171",fontWeight:"700"}},"🔒 Nicht planbar – Schlüssel nicht abgeholt"));
-    row.appendChild(info);
+    var info2=h("div",{style:{flex:"1"}});
+    info2.appendChild(h("div",{style:{fontFamily:"monospace",fontSize:"15px",fontWeight:"700",color:blocked?"#f87171":"#818cf8"}},av.acriss||""));
+    info2.appendChild(h("div",{style:{fontSize:"12px",color:"#ccc"}},av.vehicle||""));
+    info2.appendChild(h("div",{style:{fontSize:"10px",color:"#666",fontFamily:"monospace"}},av.plate||""));
+    if(av.status==="3")info2.appendChild(h("div",{style:{fontSize:"10px",color:"#f87171",fontWeight:"700"}},"🔒 Nicht im Bestand – wird nicht verplant"));
+    row.appendChild(info2);
     var right=h("div",{style:{textAlign:"right"}});
-    var badge=h("div",{style:{background:s.bg,color:s.color,border:"1px solid "+s.color,borderRadius:"20px",padding:"2px 8px",fontSize:"10px",fontWeight:"700",marginBottom:"4px"}},s.icon+" "+s.label);
-    right.appendChild(badge);
+    right.appendChild(h("div",{style:{background:s.bg,color:s.color,border:"1px solid "+s.color,borderRadius:"20px",padding:"2px 8px",fontSize:"10px",fontWeight:"700",marginBottom:"4px"}},s.icon+" "+s.label));
     var del=h("button",{class:"del"},"×");
-    var aid=av.id;
-    del.addEventListener("click",function(){state.available=state.available.filter(function(x){return x.id!==aid;});saveToStorage();showToast("🗑 Gelöscht");render();});
+    (function(aid){del.addEventListener("click",function(){state.available=state.available.filter(function(x){return x.id!==aid;});saveToStorage();showToast("🗑 Gelöscht");render();});})(av.id);
     right.appendChild(del);row.appendChild(right);card.appendChild(row);
     if(p&&!blocked)card.appendChild(h("div",{style:{marginTop:"4px",fontSize:"10px",color:"#555"}},p.catLabel+" · "+p.bodyLabel+" · "+p.transLabel));
     wrap.appendChild(card);
@@ -653,150 +481,323 @@ function renderAvailable(){
   return wrap;
 }
 
+/* ============ DROPS TAB ============ */
+function renderDrops(){
+  var wrap=document.createDocumentFragment();
+  wrap.appendChild(renderScanButtons());
+
+  var nd=state.nd;
+  var form=h("div",{class:"card",style:{border:"1px solid #2a2a45"}});
+  form.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:"#FF6600",marginBottom:"10px"}},"+ Drop manuell"));
+  var grid=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"10px"}});
+
+  function field(lbl,node){var d=h("div",{});d.appendChild(h("div",{style:{fontSize:"10px",color:"#888",marginBottom:"4px",textTransform:"uppercase"}},lbl));d.appendChild(node);return d;}
+
+  var t1=h("input",{class:"inp",type:"time",value:nd.time||""});
+  t1.addEventListener("input",function(e){state.nd.time=e.target.value;});
+  grid.appendChild(field("Rückgabe Zeit",t1));
+
+  var t2=h("input",{class:"inp",placeholder:"M-XX 1234",value:nd.plate||""});
+  t2.addEventListener("input",function(e){state.nd.plate=e.target.value.toUpperCase();});
+  grid.appendChild(field("Kennzeichen",t2));
+
+  var acw=h("div",{});
+  var t3=h("input",{class:"inp",placeholder:"CDAR",maxlength:"4",value:nd.acriss||"",style:{textTransform:"uppercase",fontFamily:"monospace",letterSpacing:"2px"}});
+  t3.addEventListener("input",function(e){state.nd.acriss=e.target.value.toUpperCase().slice(0,4);render();});
+  acw.appendChild(t3);
+  if(nd.acriss&&nd.acriss.length===4){var pd=parseA(nd.acriss);if(pd)acw.appendChild(h("div",{style:{fontSize:"9px",color:"#4ade80",marginTop:"2px"}},pd.catLabel+" · "+pd.bodyLabel+" · "+pd.transLabel));}
+  grid.appendChild(field("ACRISS",acw));
+
+  var t4=h("input",{class:"inp",placeholder:"VW Golf",value:nd.vehicle||""});
+  t4.addEventListener("input",function(e){state.nd.vehicle=e.target.value;});
+  grid.appendChild(field("Fahrzeug",t4));
+
+  var t5=h("input",{class:"inp",type:"number",placeholder:"3",value:nd.lor||""});
+  t5.addEventListener("input",function(e){state.nd.lor=e.target.value;});
+  grid.appendChild(field("LOR",t5));
+
+  var sel=h("select",{class:"inp"});
+  [["0","0 – Normal ✅"],["3","3 – Reserviert 🔒"],["4","4 – Aufbereitung ⏳"],["5","5 – Kaputt ❌"]].forEach(function(o){
+    var opt=h("option",{value:o[0]},o[1]);
+    if(nd.status===o[0])opt.setAttribute("selected","selected");
+    sel.appendChild(opt);
+  });
+  sel.addEventListener("change",function(e){state.nd.status=e.target.value;});
+  grid.appendChild(field("Status",sel));
+  form.appendChild(grid);
+
+  var addBtn=h("button",{class:"btn"},"+ Hinzufügen");
+  addBtn.addEventListener("click",function(){
+    if(!state.nd.acriss||!state.nd.plate){showToast("⚠️ ACRISS + Kennzeichen nötig");return;}
+    state.drops.push(Object.assign({},state.nd,{id:Date.now()}));
+    state.nd={time:"",plate:"",acriss:"",vehicle:"",lor:"",status:"0"};
+    saveToStorage();showToast("✅ Drop hinzugefügt");render();
+  });
+  form.appendChild(addBtn);wrap.appendChild(form);
+
+  var hdr=h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}});
+  hdr.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:"#888"}},"Drops ("+state.drops.length+")"));
+  var clr=h("button",{class:"del"},"Alle löschen");
+  clr.addEventListener("click",function(){if(confirm("Alle Drops löschen?")){state.drops=[];saveToStorage();render();}});
+  hdr.appendChild(clr);wrap.appendChild(hdr);
+
+  state.drops.forEach(function(d){
+    var s=STATUS[d.status]||STATUS["0"];
+    var p=parseA(d.acriss);
+    var card=h("div",{class:"card"});
+    var row=h("div",{style:{display:"flex",alignItems:"center",gap:"8px"}});
+    row.appendChild(h("div",{style:{fontFamily:"monospace",fontSize:"13px",fontWeight:"700",color:"#FF6600",minWidth:"48px"}},d.time||"–"));
+    var info=h("div",{style:{flex:"1"}});
+    info.appendChild(h("div",{style:{fontFamily:"monospace",fontSize:"15px",fontWeight:"700",color:"#818cf8"}},d.acriss||""));
+    info.appendChild(h("div",{style:{fontSize:"12px",color:"#ccc"}},d.vehicle||""));
+    info.appendChild(h("div",{style:{fontSize:"10px",color:"#666",fontFamily:"monospace"}},(d.plate||"")+" · LOR "+(d.lor||"–")));
+    row.appendChild(info);
+    var right=h("div",{style:{textAlign:"right"}});
+    right.appendChild(h("div",{style:{background:s.bg,color:s.color,border:"1px solid "+s.color,borderRadius:"20px",padding:"2px 8px",fontSize:"10px",fontWeight:"700",marginBottom:"4px"}},s.icon+" "+s.label));
+    var del=h("button",{class:"del"},"×");
+    (function(did){del.addEventListener("click",function(){state.drops=state.drops.filter(function(x){return x.id!==did;});saveToStorage();showToast("🗑 Gelöscht");render();});})(d.id);
+    right.appendChild(del);row.appendChild(right);card.appendChild(row);
+    if(p)card.appendChild(h("div",{style:{marginTop:"4px",fontSize:"10px",color:"#555"}},p.catLabel+" · "+p.bodyLabel+" · "+p.transLabel));
+    if(d.time){
+      var late=d.time>"14:30";
+      card.appendChild(h("div",{style:{fontSize:"10px",fontWeight:"700",marginTop:"3px",color:late?"#f59e0b":"#4ade80"}},
+        late?"⏰ Nach 14:30 → erst morgen verfügbar":"✅ Vor 14:30 → heute verfügbar (+1h Aufbereitung)"));
+    }
+    wrap.appendChild(card);
+  });
+  return wrap;
+}
+
+/* ============ RESIS TAB ============ */
+function renderResis(){
+  var wrap=document.createDocumentFragment();
+  wrap.appendChild(renderScanButtons());
+
+  var nr=state.nr;
+  var form=h("div",{class:"card",style:{border:"1px solid #2a2a45"}});
+  form.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:"#FF6600",marginBottom:"10px"}},"+ Reservierung manuell"));
+  var grid=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"10px"}});
+
+  function field(lbl,node){var d=h("div",{});d.appendChild(h("div",{style:{fontSize:"10px",color:"#888",marginBottom:"4px",textTransform:"uppercase"}},lbl));d.appendChild(node);return d;}
+
+  var r1=h("input",{class:"inp",type:"time",value:nr.time||""});
+  r1.addEventListener("input",function(e){state.nr.time=e.target.value;});
+  grid.appendChild(field("Pickup Zeit",r1));
+
+  var r2=h("input",{class:"inp",placeholder:"9734xxxxxx",value:nr.resi||""});
+  r2.addEventListener("input",function(e){state.nr.resi=e.target.value;});
+  grid.appendChild(field("Resi-Nr.",r2));
+
+  var acw=h("div",{});
+  var r3=h("input",{class:"inp",placeholder:"CDAR",maxlength:"4",value:nr.acriss||"",style:{textTransform:"uppercase",fontFamily:"monospace",letterSpacing:"2px"}});
+  r3.addEventListener("input",function(e){state.nr.acriss=e.target.value.toUpperCase().slice(0,4);render();});
+  acw.appendChild(r3);
+  if(nr.acriss&&nr.acriss.length===4){var pr=parseA(nr.acriss);if(pr)acw.appendChild(h("div",{style:{fontSize:"9px",color:"#4ade80",marginTop:"2px"}},pr.catLabel+" · "+pr.bodyLabel+" · "+pr.transLabel));}
+  grid.appendChild(field("ACRISS",acw));
+
+  var r4=h("input",{class:"inp",placeholder:"12.06.",value:nr.returnDate||""});
+  r4.addEventListener("input",function(e){state.nr.returnDate=e.target.value;});
+  grid.appendChild(field("Rückgabe",r4));
+
+  var r5=h("input",{class:"inp",type:"number",placeholder:"4",value:nr.lor||""});
+  r5.addEventListener("input",function(e){state.nr.lor=e.target.value;});
+  grid.appendChild(field("LOR (Tage)",r5));
+
+  var r6=h("input",{class:"inp",placeholder:"Name",value:nr.name||""});
+  r6.addEventListener("input",function(e){state.nr.name=e.target.value;});
+  grid.appendChild(field("Kunde",r6));
+  form.appendChild(grid);
+
+  var addBtn=h("button",{class:"btn"},"+ Hinzufügen");
+  addBtn.addEventListener("click",function(){
+    if(!state.nr.acriss||!state.nr.resi){showToast("⚠️ ACRISS + Resi-Nr. nötig");return;}
+    state.resis.push(Object.assign({},state.nr,{id:Date.now()}));
+    state.nr={time:"",resi:"",acriss:"",returnDate:"",lor:"",name:""};
+    saveToStorage();showToast("✅ Reservierung hinzugefügt");render();
+  });
+  form.appendChild(addBtn);wrap.appendChild(form);
+
+  var hdr=h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}});
+  hdr.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:"#888"}},"Reservierungen ("+state.resis.length+")"));
+  var clr=h("button",{class:"del"},"Alle löschen");
+  clr.addEventListener("click",function(){if(confirm("Alle Resis löschen?")){state.resis=[];state.overrides={};saveToStorage();render();}});
+  hdr.appendChild(clr);wrap.appendChild(hdr);
+
+  state.resis.forEach(function(r){
+    var p=parseA(r.acriss);
+    var card=h("div",{class:"card"});
+    var row=h("div",{style:{display:"flex",alignItems:"center",gap:"8px"}});
+    row.appendChild(h("div",{style:{fontFamily:"monospace",fontSize:"13px",fontWeight:"700",color:"#FF6600",minWidth:"48px"}},r.time||"–"));
+    var info=h("div",{style:{flex:"1"}});
+    info.appendChild(h("div",{style:{fontFamily:"monospace",fontSize:"15px",fontWeight:"700",color:"#818cf8"}},r.acriss||""));
+    if(r.name)info.appendChild(h("div",{style:{fontSize:"12px",color:"#ccc"}},r.name));
+    info.appendChild(h("div",{style:{fontSize:"11px",color:"#888",fontFamily:"monospace"}},r.resi||""));
+    info.appendChild(h("div",{style:{fontSize:"10px",color:"#666"}},"bis "+(r.returnDate||"–")+" · LOR "+(r.lor||"–")+"T"));
+    row.appendChild(info);
+    var del=h("button",{class:"del"},"×");
+    (function(rid){del.addEventListener("click",function(){
+      state.resis=state.resis.filter(function(x){return x.id!==rid;});
+      delete state.overrides[rid];
+      saveToStorage();showToast("🗑 Gelöscht");render();
+    });})(r.id);
+    row.appendChild(del);card.appendChild(row);
+    if(p)card.appendChild(h("div",{style:{marginTop:"4px",fontSize:"10px",color:"#555"}},p.catLabel+" · "+p.bodyLabel+" · "+p.transLabel));
+    wrap.appendChild(card);
+  });
+  return wrap;
+}
+
+/* ============ KEY TAB ============ */
 function renderKey(){
   var wrap=document.createDocumentFragment();
+
   var info=h("div",{style:{background:"linear-gradient(135deg,#052e1688,#0f766e22)",border:"1px solid #4ade8044",borderRadius:"12px",padding:"14px",marginBottom:"16px",textAlign:"center"}});
-  info.appendChild(h("div",{style:{fontSize:"20px",marginBottom:"6px"}},"🆓"));
-  info.appendChild(h("div",{style:{fontSize:"14px",fontWeight:"700",color:"#4ade80",marginBottom:"4px"}},"Google Gemini – 100% Kostenlos"));
+  info.appendChild(h("div",{style:{fontSize:"20px",marginBottom:"6px"}},"🤖"));
+  info.appendChild(h("div",{style:{fontSize:"14px",fontWeight:"700",color:"#4ade80",marginBottom:"4px"}},"Anthropic Claude API"));
   info.appendChild(h("div",{style:{fontSize:"11px",color:"#86efac"}},"Foto-Scan mit Claude KI"));
   wrap.appendChild(info);
 
   var form=h("div",{class:"card"});
-  form.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:"#4ade80",marginBottom:"10px"}},"🔑 Google Gemini API Key"));
+  form.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:"#4ade80",marginBottom:"10px"}},"🔑 Anthropic API Key"));
   var steps=h("div",{style:{background:"#0a1a0a",borderRadius:"8px",padding:"10px",marginBottom:"12px"}});
-  ["1. aistudio.google.com öffnen","2. Mit Google Account einloggen","3. API-Schlüssel → API-Schlüssel erstellen","4. Key kopieren (beginnt mit AIza... oder AQ...)","5. Hier eintragen → Speichern"].forEach(function(s){
+  ["1. console.anthropic.com öffnen","2. Einloggen → API-Schlüssel","3. Schlüssel erstellen → kopieren","4. Key beginnt mit: sk-ant-api03-...","5. Hier eintragen → Speichern"].forEach(function(s){
     steps.appendChild(h("div",{style:{fontSize:"11px",color:"#4ade80",padding:"2px 0"}},s));
   });
   form.appendChild(steps);
 
-  var keyInp=h("input",{class:"inp",type:"password",placeholder:"AIzaSy... oder AQ...",value:state.apiKey||"",style:{fontFamily:"monospace",marginBottom:"10px"}});
+  var keyInp=h("input",{class:"inp",type:"password",placeholder:"sk-ant-api03-...",value:state.apiKey||"",style:{fontFamily:"monospace",marginBottom:"10px"}});
   form.appendChild(keyInp);
 
   var saveBtn=h("button",{class:"btn"},"💾 Speichern");
   saveBtn.addEventListener("click",function(){
     var val=keyInp.value.trim();
     if(!val){showToast("⚠️ Key eingeben!");return;}
-    if(!val.startsWith("sk-ant-")){showToast("⚠️ Anthropic Key muss mit sk-ant- beginnen!");return;}
+    if(val.indexOf("sk-ant-")!==0){showToast("⚠️ Key muss mit sk-ant- beginnen!");return;}
     state.apiKey=val;
-    localStorage.setItem("sixt_api_key",val);
+    try{localStorage.setItem("sixt_api_key",val);}catch(e){}
     showToast("✅ Key gespeichert!");render();
   });
   form.appendChild(saveBtn);
 
-  if(state.apiKey){
-    form.appendChild(h("div",{style:{marginTop:"10px",padding:"8px 12px",background:"#052e16",borderRadius:"8px",fontSize:"11px",color:"#4ade80"}},"✅ Key aktiv: "+state.apiKey.slice(0,14)+"..."));
-  }
+  if(state.apiKey)form.appendChild(h("div",{style:{marginTop:"10px",padding:"8px 12px",background:"#052e16",borderRadius:"8px",fontSize:"11px",color:"#4ade80"}},"✅ Key aktiv: "+state.apiKey.slice(0,14)+"..."));
   wrap.appendChild(form);
 
   var reset=h("div",{class:"card"});
   reset.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:"#f87171",marginBottom:"8px"}},"🗑 Daten zurücksetzen"));
-  var btns=h("div",{style:{display:"flex",gap:"8px"}});
-  var b1=h("button",{style:{flex:"1",background:"#2a1515",border:"1px solid #dc2626",color:"#f87171",borderRadius:"8px",padding:"10px",cursor:"pointer"}},"Drops leeren");
-  b1.addEventListener("click",function(){if(confirm("Alle Drops löschen?")){state.drops=[];saveToStorage();showToast("🗑 Drops gelöscht");render();}});
-  var b2=h("button",{style:{flex:"1",background:"#2a1515",border:"1px solid #dc2626",color:"#f87171",borderRadius:"8px",padding:"10px",cursor:"pointer"}},"Resis leeren");
-  b2.addEventListener("click",function(){if(confirm("Alle Resis löschen?")){state.resis=[];saveToStorage();showToast("🗑 Resis gelöscht");render();}});
-  btns.appendChild(b1);btns.appendChild(b2);reset.appendChild(btns);wrap.appendChild(reset);
+  var btns=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}});
+  [["Drops leeren",function(){state.drops=[];}],["Resis leeren",function(){state.resis=[];state.overrides={};}],["Avail leeren",function(){state.available=[];}],["ALLES leeren",function(){state.drops=[];state.resis=[];state.available=[];state.overrides={};}]].forEach(function(pair){
+    var b=h("button",{style:{background:"#2a1515",border:"1px solid #dc2626",color:"#f87171",borderRadius:"8px",padding:"10px",cursor:"pointer",fontSize:"12px"}},pair[0]);
+    b.addEventListener("click",function(){
+      if(confirm(pair[0]+"?")){pair[1]();saveToStorage();showToast("🗑 Erledigt");render();}
+    });
+    btns.appendChild(b);
+  });
+  reset.appendChild(btns);wrap.appendChild(reset);
   return wrap;
 }
+
+/* ============ CHANGE MODAL ============ */
+function renderChangeModal(app){
+  if(!state.changeModal)return;
+  var overlay=h("div",{style:{position:"fixed",top:"0",left:"0",right:"0",bottom:"0",background:"rgba(0,0,0,0.85)",zIndex:"200",overflowY:"auto",padding:"16px"}});
+  var modal=h("div",{style:{background:"#1a1a2e",borderRadius:"16px",padding:"16px",border:"1px solid #FF660066",maxWidth:"500px",margin:"40px auto"}});
+  var cm=state.changeModal;
+  modal.appendChild(h("div",{style:{fontSize:"14px",fontWeight:"700",color:"#FF6600",marginBottom:"4px"}},"✏️ Fahrzeug ändern"));
+  modal.appendChild(h("div",{style:{fontSize:"11px",color:"#888",marginBottom:"12px"}},(cm.resi.time||"–")+" · "+(cm.resi.acriss||"")+(cm.resi.name?" · "+cm.resi.name:"")));
+
+  /* Welche Autos sind bereits verplant? */
+  var matches=autoMatch();
+  var planned={};
+  matches.forEach(function(m){
+    if(m.d&&m.r.id!==cm.resiId)planned[m.d.id]=(m.r.time||"")+" · "+(m.r.acriss||"");
+  });
+
+  var pool=getPool();
+  /* Auch nicht-planbare anzeigen (rot), damit man alles sieht */
+  var blockedAvail=state.available.filter(function(a){
+    return PLANBAR_AVAIL.indexOf(parseInt(a.status,10)||0)<0;
+  }).map(function(a){return{id:"av"+a.id,plate:a.plate,acriss:a.acriss,vehicle:a.vehicle,time:"",src:"avail",blocked:true,status:a.status};});
+
+  pool.concat(blockedAvail).forEach(function(d){
+    var p=parseA(d.acriss);
+    var isSel=state.overrides[cm.resiId]===d.id;
+    var isPlanned=planned[d.id];
+    var isBlocked=d.blocked;
+    var bg=isSel?"#1a3a1a":(isBlocked?"#1a0a0a":(isPlanned?"#1a1208":"#0d0d1a"));
+    var bdr=isSel?"#16a34a":(isBlocked?"#dc2626":(isPlanned?"#d97706":"#2a2a45"));
+    var row=h("div",{style:{background:bg,border:"1px solid "+bdr,borderRadius:"10px",padding:"12px",marginBottom:"8px",cursor:isBlocked?"not-allowed":"pointer",opacity:isBlocked?"0.6":(isPlanned?"0.85":"1")}});
+    var top=h("div",{style:{display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}});
+    top.appendChild(h("div",{style:{fontFamily:"monospace",fontSize:"14px",fontWeight:"700",color:isSel?"#4ade80":(isBlocked?"#f87171":(isPlanned?"#fbbf24":"#818cf8"))}},d.acriss||""));
+    top.appendChild(h("div",{style:{flex:"1",fontSize:"12px",color:"#ccc"}},d.vehicle||""));
+    top.appendChild(h("div",{style:{fontFamily:"monospace",fontSize:"10px",color:"#666"}},d.plate||""));
+    if(d.time)top.appendChild(h("span",{style:{fontSize:"10px",color:"#FF6600",fontFamily:"monospace"}},"Drop "+d.time));
+    if(isSel)top.appendChild(h("span",{style:{color:"#4ade80",fontSize:"11px",fontWeight:"700"}},"✅ Ausgewählt"));
+    if(isPlanned)top.appendChild(h("span",{style:{background:"#451a03",color:"#fbbf24",borderRadius:"20px",padding:"2px 8px",fontSize:"10px",fontWeight:"700"}},"⚠️ Verplant: "+isPlanned));
+    if(isBlocked)top.appendChild(h("span",{style:{background:"#450a0a",color:"#f87171",borderRadius:"20px",padding:"2px 8px",fontSize:"10px",fontWeight:"700"}},"🔒 Nicht im Bestand"));
+    row.appendChild(top);
+    if(p)row.appendChild(h("div",{style:{fontSize:"10px",color:"#555",marginTop:"4px"}},p.catLabel+" · "+p.bodyLabel+" · "+p.transLabel));
+    if(!isBlocked){
+      (function(vid,wasPlanned){
+        row.addEventListener("click",function(){
+          state.overrides[cm.resiId]=vid;
+          state.changeModal=null;
+          saveToStorage();
+          showToast(wasPlanned?"⚠️ Achtung: Auto war bereits verplant!":"✅ Fahrzeug geändert!");
+          render();
+        });
+      })(d.id,isPlanned);
+    }
+    modal.appendChild(row);
+  });
+
+  if(state.overrides[cm.resiId]){
+    var rst=h("button",{style:{background:"#2a1515",border:"1px solid #dc2626",color:"#f87171",borderRadius:"8px",padding:"10px",width:"100%",marginTop:"8px",cursor:"pointer"}},"🔄 Automatische Zuteilung wiederherstellen");
+    rst.addEventListener("click",function(){
+      delete state.overrides[cm.resiId];
+      state.changeModal=null;saveToStorage();
+      showToast("🔄 Automatisch wiederhergestellt");render();
+    });
+    modal.appendChild(rst);
+  }
+  var cls=h("button",{style:{background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",borderRadius:"8px",padding:"10px",width:"100%",marginTop:"8px",cursor:"pointer"}},"✕ Abbrechen");
+  cls.addEventListener("click",function(){state.changeModal=null;render();});
+  modal.appendChild(cls);
+  overlay.appendChild(modal);
+  app.appendChild(overlay);
+}
+
+/* ============ MAIN RENDER ============ */
+var TABS=[{k:"plan",i:"📋",l:"Plan"},{k:"available",i:"🅿️",l:"Avail"},{k:"drops",i:"📥",l:"Drops"},{k:"resis",i:"📅",l:"Resis"},{k:"key",i:"🔑",l:"Key"}];
 
 function render(){
   var app=document.getElementById("app");
   app.innerHTML="";
 
-  // Header
-  var hdr=h("div",{style:{background:"linear-gradient(135deg,#FF6600,#cc4400)",padding:"14px 16px",display:"flex",alignItems:"center",gap:"12px",position:"sticky",top:"0",zIndex:"100",boxShadow:"0 2px 16px #FF660044"}});
-  hdr.appendChild(h("div",{style:{fontSize:"24px"}},"🚗"));
-  var title=h("div",{style:{flex:"1"}});
-  title.appendChild(h("div",{style:{fontSize:"15px",fontWeight:"700"}},"Fleet Plan"));
-  title.appendChild(h("div",{style:{fontSize:"10px",opacity:"0.8",fontFamily:"monospace"}},"Sixt Harburg · 46790"));
+  /* Header */
+  var hdr=h("div",{style:{background:"linear-gradient(135deg,#FF6600,#cc4400)",padding:"12px 14px",display:"flex",alignItems:"center",gap:"10px",position:"sticky",top:"0",zIndex:"100",boxShadow:"0 2px 16px #FF660044"}});
+  hdr.appendChild(h("div",{style:{fontSize:"22px"}},"🚗"));
+  var title=h("div",{style:{flex:"1",minWidth:"0"}});
+  title.appendChild(h("div",{style:{fontSize:"14px",fontWeight:"700"}},"Fleet Plan"));
+  title.appendChild(h("div",{style:{fontSize:"9px",opacity:"0.8",fontFamily:"monospace"}},"Sixt Harburg · 46790"));
   hdr.appendChild(title);
-  var tabs=h("div",{style:{display:"flex",gap:"3px",background:"rgba(0,0,0,0.2)",borderRadius:"8px",padding:"3px"}});
-  [{k:"plan",i:"📋",l:"Plan"},{k:"available",i:"🅿️",l:"Avail"},{k:"drops",i:"📥",l:"Drops"},{k:"resis",i:"📅",l:"Resis"},{k:"key",i:"🔑",l:"Key"}].forEach(function(t){
-    var btn=h("button",{style:{background:state.tab===t.k?"#fff":"transparent",color:state.tab===t.k?"#FF6600":"#fff",border:"none",borderRadius:"6px",padding:"5px 6px",fontSize:"9px",fontWeight:state.tab===t.k?"700":"400",cursor:"pointer"}},t.i+" "+t.l);
+  var tabs=h("div",{style:{display:"flex",gap:"2px",background:"rgba(0,0,0,0.2)",borderRadius:"8px",padding:"3px"}});
+  TABS.forEach(function(t){
+    var btn=h("button",{style:{background:state.tab===t.k?"#fff":"transparent",color:state.tab===t.k?"#FF6600":"#fff",border:"none",borderRadius:"6px",padding:"5px 5px",fontSize:"9px",fontWeight:state.tab===t.k?"700":"400",cursor:"pointer",whiteSpace:"nowrap"}},t.i+" "+t.l);
     (function(tk){btn.addEventListener("click",function(){state.tab=tk;render();});})(t.k);
     tabs.appendChild(btn);
   });
   hdr.appendChild(tabs);
   app.appendChild(hdr);
 
-  // Toast
+  /* Toast */
   if(state.toast){
-    var toast=h("div",{style:{position:"fixed",top:"65px",left:"50%",transform:"translateX(-50%)",background:"#1a1a2e",border:"1px solid #FF6600",borderRadius:"10px",padding:"10px 18px",fontSize:"13px",fontWeight:"600",zIndex:"999",color:"#fff",boxShadow:"0 4px 20px #00000088",whiteSpace:"nowrap",maxWidth:"90vw",textAlign:"center"}},state.toast);
-    app.appendChild(toast);
+    app.appendChild(h("div",{style:{position:"fixed",top:"60px",left:"50%",transform:"translateX(-50%)",background:"#1a1a2e",border:"1px solid #FF6600",borderRadius:"10px",padding:"10px 18px",fontSize:"13px",fontWeight:"600",zIndex:"999",color:"#fff",boxShadow:"0 4px 20px #00000088",maxWidth:"92vw",textAlign:"center"}},state.toast));
   }
 
-  // Change Modal
-  if(state.changeModal){
-    var overlay=h("div",{style:{position:"fixed",top:"0",left:"0",right:"0",bottom:"0",background:"rgba(0,0,0,0.8)",zIndex:"200",overflowY:"auto",padding:"20px"}});
-    var modal=h("div",{style:{background:"#1a1a2e",borderRadius:"16px",padding:"16px",border:"1px solid #FF660066",maxWidth:"500px",margin:"60px auto"}});
-    modal.appendChild(h("div",{style:{fontSize:"14px",fontWeight:"700",color:"#FF6600",marginBottom:"12px"}},"✏️ Fahrzeug ändern für "+state.changeModal.resi.time+" · "+state.changeModal.resi.acriss+(state.changeModal.resi.name?" · "+state.changeModal.resi.name:"")));
-    modal.appendChild(h("div",{style:{fontSize:"11px",color:"#888",marginBottom:"12px"}},"Wähle ein Fahrzeug aus den Drops:"));
-    
-    // Figure out which drops are already planned
-    var currentMatches=autoMatch(state.drops,state.resis);
-    var plannedDropIds={};
-    currentMatches.forEach(function(m){
-      if(m.d&&m.r.id!==state.changeModal.resiId){
-        plannedDropIds[m.d.id]=m.r.time+" · "+m.r.acriss;
-      }
-    });
+  /* Change Modal */
+  renderChangeModal(app);
 
-    // Combined pool: available + drops
-    var allVehicles=[].concat(
-      state.available.map(function(a){return Object.assign({},a,{_src:"available"});}),
-      state.drops.map(function(d){return Object.assign({},d,{_src:"drop"});})
-    );
-    // List all drops as options
-    allVehicles.forEach(function(d){
-      var p=parseA(d.acriss);
-      var isSelected=state.overrides[state.changeModal.resiId]===d.id;
-      var isPlanned=plannedDropIds[d.id];
-      var bg=isSelected?"#1a3a1a":isPlanned?"#1a1208":"#0d0d1a";
-      var bdr=isSelected?"#16a34a":isPlanned?"#d97706":"#2a2a45";
-      var row=h("div",{style:{background:bg,border:"1px solid "+bdr,borderRadius:"10px",padding:"12px",marginBottom:"8px",cursor:"pointer",opacity:isPlanned?"0.75":"1"}});
-      var top2=h("div",{style:{display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}});
-      top2.appendChild(h("div",{style:{fontFamily:"monospace",fontSize:"14px",fontWeight:"700",color:isSelected?"#4ade80":isPlanned?"#fbbf24":"#818cf8"}},d.acriss));
-      top2.appendChild(h("div",{style:{flex:"1",fontSize:"12px",color:"#ccc"}},d.vehicle));
-      top2.appendChild(h("div",{style:{fontFamily:"monospace",fontSize:"10px",color:"#666"}},d.plate));
-      if(isSelected)top2.appendChild(h("span",{style:{color:"#4ade80",fontSize:"11px",fontWeight:"700"}},"✅ Ausgewählt"));
-      if(isPlanned)top2.appendChild(h("span",{style:{background:"#451a03",color:"#fbbf24",borderRadius:"20px",padding:"2px 8px",fontSize:"10px",fontWeight:"700"}},"⚠️ Verplant: "+isPlanned));
-      row.appendChild(top2);
-      if(p)row.appendChild(h("div",{style:{fontSize:"10px",color:"#555",marginTop:"4px"}},p.catLabel+" · "+p.bodyLabel+" · "+p.transLabel));
-      (function(dropId){
-        row.addEventListener("click",function(){
-          state.overrides[state.changeModal.resiId]=dropId;
-          state.changeModal=null;
-          saveToStorage();
-          showToast(isPlanned?"⚠️ Achtung: Fahrzeug war bereits verplant!":"✅ Fahrzeug geändert!");
-          render();
-        });
-      })(d.id);
-      modal.appendChild(row);
-    });
-    
-    // Remove override option
-    if(state.overrides[state.changeModal.resiId]){
-      var resetBtn=h("button",{style:{background:"#2a1515",border:"1px solid #dc2626",color:"#f87171",borderRadius:"8px",padding:"10px",width:"100%",marginTop:"8px",cursor:"pointer"}},"🔄 Automatische Zuteilung wiederherstellen");
-      (function(rid){
-        resetBtn.addEventListener("click",function(){
-          delete state.overrides[rid];
-          state.changeModal=null;
-          saveToStorage();
-          showToast("🔄 Automatisch wiederhergestellt");
-          render();
-        });
-      })(state.changeModal.resiId);
-      modal.appendChild(resetBtn);
-    }
-    
-    var closeBtn=h("button",{style:{background:"#1e293b",border:"1px solid #334155",color:"#94a3b8",borderRadius:"8px",padding:"10px",width:"100%",marginTop:"8px",cursor:"pointer"}},"✕ Abbrechen");
-    closeBtn.addEventListener("click",function(){state.changeModal=null;render();});
-    modal.appendChild(closeBtn);
-    overlay.appendChild(modal);
-    app.appendChild(overlay);
-  }
-
-  // Content
+  /* Content */
   var content=h("div",{style:{padding:"14px",paddingBottom:"80px"}});
   if(state.tab==="plan")content.appendChild(renderPlan());
   else if(state.tab==="available")content.appendChild(renderAvailable());
@@ -805,23 +806,19 @@ function render(){
   else content.appendChild(renderKey());
   app.appendChild(content);
 
-  // Bottom nav
+  /* Bottom Nav */
   var nav=h("div",{style:{position:"fixed",bottom:"0",left:"0",right:"0",background:"#0d0d1a",borderTop:"1px solid #1f1f35",display:"flex",zIndex:"100"}});
-  [{k:"plan",i:"📋",l:"Plan"},{k:"available",i:"🅿️",l:"Avail"},{k:"drops",i:"📥",l:"Drops"},{k:"resis",i:"📅",l:"Resis"},{k:"key",i:"🔑",l:"Key"}].forEach(function(t){
-    var btn=h("button",{style:{flex:"1",background:"none",border:"none",padding:"10px 0 8px",cursor:"pointer",color:state.tab===t.k?"#FF6600":"#555"}});
-    btn.appendChild(h("div",{style:{fontSize:"18px"}},t.i));
-    btn.appendChild(h("div",{style:{fontSize:"10px",fontWeight:state.tab===t.k?"700":"400"}},t.l));
+  TABS.forEach(function(t){
+    var btn=h("button",{style:{flex:"1",background:"none",border:"none",padding:"9px 0 7px",cursor:"pointer",color:state.tab===t.k?"#FF6600":"#555"}});
+    btn.appendChild(h("div",{style:{fontSize:"17px"}},t.i));
+    btn.appendChild(h("div",{style:{fontSize:"9px",fontWeight:state.tab===t.k?"700":"400"}},t.l));
     (function(tk){btn.addEventListener("click",function(){state.tab=tk;render();});})(t.k);
     nav.appendChild(btn);
   });
   app.appendChild(nav);
 }
 
-// CSS animation
-var style=document.createElement("style");
-style.textContent="@keyframes spin{to{transform:rotate(360deg)}}";
-document.head.appendChild(style);
-
+loadFromStorage();
 render();
 </script>
 </body>
