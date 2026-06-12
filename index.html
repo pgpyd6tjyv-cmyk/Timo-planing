@@ -105,16 +105,23 @@ function autoMatch(drops,resis){
         return{r,d:overrideDrop,type,manual:true};
       }
     }
-    const cands=pool.filter(function(d){
+    // Erst: Autos die zeitlich passen (Drop + 1h vor Pickup)
+    var timedCands=pool.filter(function(d){
       if(used.has(d.id))return false;
-      // Zeitprüfung: Drop muss mind. 1h vor Pickup zurück sein
       if(d.time&&r.time){
-        var dropReady=timeToMin(d.time)+60; // +1h Aufbereitung
+        var dropReady=timeToMin(d.time)+60;
         var pickupTime=timeToMin(r.time);
-        if(dropReady>pickupTime)return false; // Auto noch nicht bereit!
+        if(dropReady>pickupTime)return false;
       }
       return true;
-    }).map(d=>({d,s:score(r.acriss,d.acriss,r.lor)})).filter(x=>x.s>-999).sort((a,b)=>b.s-a.s);
+    }).map(function(d){return{d,s:score(r.acriss,d.acriss,r.lor)};}).filter(function(x){return x.s>-999;}).sort(function(a,b){return b.s-a.s;});
+
+    // Falls nichts passt: alle verfügbaren nehmen (Kunde muss bedient werden!)
+    var allCands=timedCands.length>0?timedCands:pool.filter(function(d){
+      return !used.has(d.id);
+    }).map(function(d){return{d,s:score(r.acriss,d.acriss,r.lor)};}).filter(function(x){return x.s>-999;}).sort(function(a,b){return b.s-a.s;});
+
+    const cands=allCands;
     if(!cands.length)return{r,d:null,type:"none"};
     used.add(cands[0].d.id);
     const type=parseA(r.acriss)?.raw===parseA(cands[0].d.acriss)?.raw?"exact":"upgrade";
