@@ -37,9 +37,10 @@ const STATUS={
   "1": {label:"Vermietbereit", color:"#16a34a",bg:"#dcfce7",icon:"✅"},
   "2": {label:"Vermietbereit", color:"#16a34a",bg:"#dcfce7",icon:"✅"},
   "3": {label:"Schlüssel offen",color:"#d97706",bg:"#fef3c7",icon:"🔒"},
-  "4": {label:"Aufbereitung",  color:"#2563eb",bg:"#dbeafe",icon:"⏳"},
+  "4": {label:"Verfügbar",     color:"#16a34a",bg:"#dcfce7",icon:"✅"},
   "5": {label:"Kaputt",        color:"#dc2626",bg:"#fee2e2",icon:"🔧"},
   "6": {label:"Kaputt",        color:"#dc2626",bg:"#fee2e2",icon:"🔧"},
+  "9": {label:"Verfügbar",     color:"#16a34a",bg:"#dcfce7",icon:"✅"},
   "10":{label:"Aufbereitung",  color:"#2563eb",bg:"#dbeafe",icon:"⏳"},
   "11":{label:"Aufbereitung",  color:"#2563eb",bg:"#dbeafe",icon:"⏳"},
 };
@@ -622,7 +623,7 @@ function renderAvailable(){
   state.available.forEach(function(av){
     var s=STATUS[av.status]||STATUS["1"];
     var p=parseA(av.acriss);
-    var blocked=av.status==="3";
+    var blocked=av.status==="3"||av.status==="5"||av.status==="6";
     var bg=blocked?"#1a0a0a":"#131325";
     var card=h("div",{style:{background:bg,borderRadius:"10px",padding:"12px",marginBottom:"8px",border:"1px solid "+(blocked?"#dc262644":"#1f1f35")}});
     var row=h("div",{style:{display:"flex",alignItems:"center",gap:"8px"}});
