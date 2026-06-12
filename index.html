@@ -124,6 +124,8 @@ function autoMatch(drops,resis){
 var state={
   overrides:{},
   changeModal:null,
+  available:[],
+  na:{plate:"",acriss:"",vehicle:"",status:"1"},
   tab:"plan",
   drops:[
     {id:1, time:"",plate:"HH-AD 9342", acriss:"GWAR",vehicle:"Mercedes Benz C-Estate",  lor:"146",status:"0"},
@@ -161,6 +163,7 @@ function saveToStorage(){
     localStorage.setItem("fleet_drops",JSON.stringify(state.drops));
     localStorage.setItem("fleet_resis",JSON.stringify(state.resis));
     localStorage.setItem("fleet_overrides",JSON.stringify(state.overrides));
+    localStorage.setItem("fleet_available",JSON.stringify(state.available));
   }catch(e){}
 }
 
@@ -169,9 +172,11 @@ function loadFromStorage(){
     var d=localStorage.getItem("fleet_drops");
     var r=localStorage.getItem("fleet_resis");
     var o=localStorage.getItem("fleet_overrides");
+    var av=localStorage.getItem("fleet_available");
     if(d)state.drops=JSON.parse(d);
     if(r)state.resis=JSON.parse(r);
     if(o)state.overrides=JSON.parse(o);
+    if(av)state.available=JSON.parse(av);
   }catch(e){}
 }
 
@@ -545,6 +550,91 @@ function renderResis(){
   return wrap;
 }
 
+function renderAvailable(){
+  var na=state.na;
+  var wrap=document.createDocumentFragment();
+
+  // Info box
+  var info=h("div",{style:{background:"#0a1a0a",border:"1px solid #16a34a44",borderRadius:"10px",padding:"10px 12px",marginBottom:"12px",fontSize:"11px",color:"#86efac"}});
+  info.appendChild(h("div",{style:{fontWeight:"700",color:"#4ade80",marginBottom:"4px"}},"🅿️ Available – Fahrzeuge an der Station"));
+  info.appendChild(h("div",{},"Nur Status 1 und 2 werden verplant. Status 3 (Schlüssel nicht abgeholt) wird automatisch ausgeschlossen."));
+  wrap.appendChild(info);
+
+  // Form
+  var form=h("div",{class:"card",style:{border:"1px solid #2a2a45"}});
+  form.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:"#FF6600",marginBottom:"10px"}},"+ Available Fahrzeug hinzufügen"));
+  var grid=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"10px"}});
+
+  var p1=h("div",{});p1.appendChild(h("div",{style:{fontSize:"10px",color:"#888",marginBottom:"4px",textTransform:"uppercase"}},"Kennzeichen"));
+  var i1=h("input",{class:"inp",placeholder:"M-XX 1234",value:na.plate||""});
+  i1.addEventListener("input",function(e){state.na.plate=e.target.value.toUpperCase();});
+  p1.appendChild(i1);grid.appendChild(p1);
+
+  var p2=h("div",{});p2.appendChild(h("div",{style:{fontSize:"10px",color:"#888",marginBottom:"4px",textTransform:"uppercase"}},"ACRISS"));
+  var i2=h("input",{class:"inp",placeholder:"CDAR",maxlength:"4",value:na.acriss||"",style:{textTransform:"uppercase",fontFamily:"monospace",letterSpacing:"2px",color:na.acriss&&na.acriss.length===4?"#4ade80":"#fff"}});
+  i2.addEventListener("input",function(e){state.na.acriss=e.target.value.toUpperCase().slice(0,4);render();});
+  p2.appendChild(i2);
+  if(na.acriss&&na.acriss.length===4){var pa=parseA(na.acriss);if(pa)p2.appendChild(h("div",{style:{fontSize:"9px",color:"#4ade80",marginTop:"2px"}},pa.catLabel+" · "+pa.bodyLabel+" · "+pa.transLabel));}
+  grid.appendChild(p2);
+
+  var p3=h("div",{});p3.appendChild(h("div",{style:{fontSize:"10px",color:"#888",marginBottom:"4px",textTransform:"uppercase"}},"Fahrzeug"));
+  var i3=h("input",{class:"inp",placeholder:"VW Golf",value:na.vehicle||""});
+  i3.addEventListener("input",function(e){state.na.vehicle=e.target.value;});
+  p3.appendChild(i3);grid.appendChild(p3);
+
+  var p4=h("div",{});p4.appendChild(h("div",{style:{fontSize:"10px",color:"#888",marginBottom:"4px",textTransform:"uppercase"}},"Status"));
+  var sel=h("select",{class:"inp"});
+  [["1","1 – Vermietbereit ✅"],["2","2 – Vermietbereit ✅"],["3","3 – Schlüssel offen 🔒"],["10","10 – Aufbereitung ⏳"],["11","11 – Aufbereitung ⏳"],["5","5 – Kaputt ❌"]].forEach(function(o){
+    var opt=h("option",{value:o[0]},o[1]);
+    if(na.status===o[0])opt.setAttribute("selected","selected");
+    sel.appendChild(opt);
+  });
+  sel.addEventListener("change",function(e){state.na.status=e.target.value;});
+  p4.appendChild(sel);grid.appendChild(p4);
+  form.appendChild(grid);
+
+  var addBtn=h("button",{class:"btn"},"+ Hinzufügen");
+  addBtn.addEventListener("click",function(){
+    if(!state.na.acriss||!state.na.plate){showToast("⚠️ ACRISS + Kennzeichen nötig");return;}
+    state.available.push(Object.assign({},state.na,{id:Date.now()}));
+    state.na={plate:"",acriss:"",vehicle:"",status:"1"};
+    saveToStorage();showToast("✅ Hinzugefügt");render();
+  });
+  form.appendChild(addBtn);wrap.appendChild(form);
+
+  // List header
+  var hdrRow=h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}});
+  hdrRow.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:"#888"}},"Available ("+state.available.length+")"));
+  var clrBtn=h("button",{style:{background:"#2a1515",border:"1px solid #dc2626",color:"#f87171",borderRadius:"6px",padding:"4px 10px",fontSize:"11px",cursor:"pointer"}},"Alle löschen");
+  clrBtn.addEventListener("click",function(){if(confirm("Alle Available löschen?")){state.available=[];saveToStorage();render();}});
+  hdrRow.appendChild(clrBtn);wrap.appendChild(hdrRow);
+
+  state.available.forEach(function(av){
+    var s=STATUS[av.status]||STATUS["1"];
+    var p=parseA(av.acriss);
+    var blocked=av.status==="3";
+    var bg=blocked?"#1a0a0a":"#131325";
+    var card=h("div",{style:{background:bg,borderRadius:"10px",padding:"12px",marginBottom:"8px",border:"1px solid "+(blocked?"#dc262644":"#1f1f35")}});
+    var row=h("div",{style:{display:"flex",alignItems:"center",gap:"8px"}});
+    var info=h("div",{style:{flex:"1"}});
+    info.appendChild(h("div",{style:{fontFamily:"monospace",fontSize:"15px",fontWeight:"700",color:blocked?"#f87171":"#818cf8"}},av.acriss));
+    info.appendChild(h("div",{style:{fontSize:"12px",color:"#ccc"}},av.vehicle));
+    info.appendChild(h("div",{style:{fontSize:"10px",color:"#666",fontFamily:"monospace"}},av.plate));
+    if(blocked)info.appendChild(h("div",{style:{fontSize:"10px",color:"#f87171",fontWeight:"700"}},"🔒 Nicht planbar – Schlüssel nicht abgeholt"));
+    row.appendChild(info);
+    var right=h("div",{style:{textAlign:"right"}});
+    var badge=h("div",{style:{background:s.bg,color:s.color,border:"1px solid "+s.color,borderRadius:"20px",padding:"2px 8px",fontSize:"10px",fontWeight:"700",marginBottom:"4px"}},s.icon+" "+s.label);
+    right.appendChild(badge);
+    var del=h("button",{class:"del"},"×");
+    var aid=av.id;
+    del.addEventListener("click",function(){state.available=state.available.filter(function(x){return x.id!==aid;});saveToStorage();showToast("🗑 Gelöscht");render();});
+    right.appendChild(del);row.appendChild(right);card.appendChild(row);
+    if(p&&!blocked)card.appendChild(h("div",{style:{marginTop:"4px",fontSize:"10px",color:"#555"}},p.catLabel+" · "+p.bodyLabel+" · "+p.transLabel));
+    wrap.appendChild(card);
+  });
+  return wrap;
+}
+
 function renderKey(){
   var wrap=document.createDocumentFragment();
   var info=h("div",{style:{background:"linear-gradient(135deg,#052e1688,#0f766e22)",border:"1px solid #4ade8044",borderRadius:"12px",padding:"14px",marginBottom:"16px",textAlign:"center"}});
@@ -603,8 +693,8 @@ function render(){
   title.appendChild(h("div",{style:{fontSize:"10px",opacity:"0.8",fontFamily:"monospace"}},"Sixt Harburg · 46790"));
   hdr.appendChild(title);
   var tabs=h("div",{style:{display:"flex",gap:"3px",background:"rgba(0,0,0,0.2)",borderRadius:"8px",padding:"3px"}});
-  [{k:"plan",i:"📋",l:"Plan"},{k:"drops",i:"📥",l:"Drops"},{k:"resis",i:"📅",l:"Resis"},{k:"key",i:"🔑",l:"Key"}].forEach(function(t){
-    var btn=h("button",{style:{background:state.tab===t.k?"#fff":"transparent",color:state.tab===t.k?"#FF6600":"#fff",border:"none",borderRadius:"6px",padding:"5px 7px",fontSize:"10px",fontWeight:state.tab===t.k?"700":"400",cursor:"pointer"}},t.i+" "+t.l);
+  [{k:"plan",i:"📋",l:"Plan"},{k:"available",i:"🅿️",l:"Avail"},{k:"drops",i:"📥",l:"Drops"},{k:"resis",i:"📅",l:"Resis"},{k:"key",i:"🔑",l:"Key"}].forEach(function(t){
+    var btn=h("button",{style:{background:state.tab===t.k?"#fff":"transparent",color:state.tab===t.k?"#FF6600":"#fff",border:"none",borderRadius:"6px",padding:"5px 6px",fontSize:"9px",fontWeight:state.tab===t.k?"700":"400",cursor:"pointer"}},t.i+" "+t.l);
     (function(tk){btn.addEventListener("click",function(){state.tab=tk;render();});})(t.k);
     tabs.appendChild(btn);
   });
@@ -633,8 +723,13 @@ function render(){
       }
     });
 
+    // Combined pool: available + drops
+    var allVehicles=[].concat(
+      state.available.map(function(a){return Object.assign({},a,{_src:"available"});}),
+      state.drops.map(function(d){return Object.assign({},d,{_src:"drop"});})
+    );
     // List all drops as options
-    state.drops.forEach(function(d){
+    allVehicles.forEach(function(d){
       var p=parseA(d.acriss);
       var isSelected=state.overrides[state.changeModal.resiId]===d.id;
       var isPlanned=plannedDropIds[d.id];
@@ -686,6 +781,7 @@ function render(){
   // Content
   var content=h("div",{style:{padding:"14px",paddingBottom:"80px"}});
   if(state.tab==="plan")content.appendChild(renderPlan());
+  else if(state.tab==="available")content.appendChild(renderAvailable());
   else if(state.tab==="drops")content.appendChild(renderDrops());
   else if(state.tab==="resis")content.appendChild(renderResis());
   else content.appendChild(renderKey());
@@ -693,7 +789,7 @@ function render(){
 
   // Bottom nav
   var nav=h("div",{style:{position:"fixed",bottom:"0",left:"0",right:"0",background:"#0d0d1a",borderTop:"1px solid #1f1f35",display:"flex",zIndex:"100"}});
-  [{k:"plan",i:"📋",l:"Plan"},{k:"drops",i:"📥",l:"Drops"},{k:"resis",i:"📅",l:"Resis"},{k:"key",i:"🔑",l:"Key"}].forEach(function(t){
+  [{k:"plan",i:"📋",l:"Plan"},{k:"available",i:"🅿️",l:"Avail"},{k:"drops",i:"📥",l:"Drops"},{k:"resis",i:"📅",l:"Resis"},{k:"key",i:"🔑",l:"Key"}].forEach(function(t){
     var btn=h("button",{style:{flex:"1",background:"none",border:"none",padding:"10px 0 8px",cursor:"pointer",color:state.tab===t.k?"#FF6600":"#555"}});
     btn.appendChild(h("div",{style:{fontSize:"18px"}},t.i));
     btn.appendChild(h("div",{style:{fontSize:"10px",fontWeight:state.tab===t.k?"700":"400"}},t.l));
