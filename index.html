@@ -208,6 +208,8 @@ var state={
   overrides:{},
   changeModal:null,
   editAvail:null,
+  editDrop:null,
+  editResi:null,
   apiKey:"",
   cutoffTime:"14:30",
   scanning:false,
@@ -747,6 +749,27 @@ function renderDrops(){
   state.drops.forEach(function(d){
     var s=STATUS[d.status]||STATUS["0"];
     var p=parseA(d.acriss);
+
+    /* ---- Bearbeiten-Modus ---- */
+    if(state.editDrop===d.id){
+      var ec=h("div",{style:{background:"#1a1a2e",borderRadius:"10px",padding:"12px",marginBottom:"8px",border:"1px solid #FF6600"}});
+      ec.appendChild(h("div",{style:{fontSize:"11px",fontWeight:"700",color:"#FF6600",marginBottom:"8px"}},"✏️ Drop bearbeiten"));
+      var eg=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"8px"}});
+      function ef(lbl,node){var x=h("div",{});x.appendChild(h("div",{style:{fontSize:"9px",color:"#888",marginBottom:"3px",textTransform:"uppercase"}},lbl));x.appendChild(node);return x;}
+      var dt=h("input",{class:"inp",type:"time",value:d.time||""});dt.addEventListener("input",function(e){d.time=e.target.value;});eg.appendChild(ef("Rückgabe",dt));
+      var dp=h("input",{class:"inp",value:d.plate||"",style:{fontFamily:"monospace"}});dp.addEventListener("input",function(e){d.plate=e.target.value.toUpperCase();});eg.appendChild(ef("Kennzeichen",dp));
+      var daw=h("div",{});var da=h("input",{class:"inp",value:d.acriss||"",maxlength:"4",style:{textTransform:"uppercase",fontFamily:"monospace",letterSpacing:"2px"}});da.addEventListener("input",function(e){d.acriss=e.target.value.toUpperCase().slice(0,4);render();});daw.appendChild(da);var dpa=parseA(d.acriss);if(dpa)daw.appendChild(h("div",{style:{fontSize:"9px",color:"#4ade80",marginTop:"2px"}},dpa.catLabel+" · "+dpa.bodyLabel+" · "+dpa.transLabel));eg.appendChild(ef("ACRISS",daw));
+      var dv=h("input",{class:"inp",value:d.vehicle||""});dv.addEventListener("input",function(e){d.vehicle=e.target.value;});eg.appendChild(ef("Fahrzeug",dv));
+      var dl=h("input",{class:"inp",type:"number",value:d.lor||""});dl.addEventListener("input",function(e){d.lor=e.target.value;});eg.appendChild(ef("LOR",dl));
+      var ds=h("select",{class:"inp"});[["0","0 – Normal ✅"],["3","3 – Reserviert 🔒"],["4","4 – Aufbereitung ⏳"],["5","5 – Kaputt ❌"]].forEach(function(o){var opt=h("option",{value:o[0]},o[1]);if(d.status===o[0])opt.setAttribute("selected","selected");ds.appendChild(opt);});ds.addEventListener("change",function(e){d.status=e.target.value;});eg.appendChild(ef("Status",ds));
+      ec.appendChild(eg);
+      var eb=h("div",{style:{display:"flex",gap:"8px"}});
+      var sb=h("button",{style:{flex:"1",background:"#16a34a",color:"#fff",border:"none",borderRadius:"8px",padding:"10px",fontWeight:"700",cursor:"pointer"}},"✅ Speichern");sb.addEventListener("click",function(){state.editDrop=null;saveToStorage();showToast("✅ Gespeichert");render();});
+      var cb=h("button",{style:{flex:"1",background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:"8px",padding:"10px",cursor:"pointer"}},"Abbrechen");cb.addEventListener("click",function(){state.editDrop=null;render();});
+      eb.appendChild(sb);eb.appendChild(cb);ec.appendChild(eb);
+      wrap.appendChild(ec);return;
+    }
+
     var card=h("div",{class:"card"});
     var row=h("div",{style:{display:"flex",alignItems:"center",gap:"8px"}});
     row.appendChild(h("div",{style:{fontFamily:"monospace",fontSize:"13px",fontWeight:"700",color:"#FF6600",minWidth:"48px"}},d.time||"–"));
@@ -755,11 +778,15 @@ function renderDrops(){
     info.appendChild(h("div",{style:{fontSize:"12px",color:"#ccc"}},d.vehicle||""));
     info.appendChild(h("div",{style:{fontSize:"10px",color:"#666",fontFamily:"monospace"}},(d.plate||"")+" · LOR "+(d.lor||"–")));
     row.appendChild(info);
-    var right=h("div",{style:{textAlign:"right"}});
-    right.appendChild(h("div",{style:{background:s.bg,color:s.color,border:"1px solid "+s.color,borderRadius:"20px",padding:"2px 8px",fontSize:"10px",fontWeight:"700",marginBottom:"4px"}},s.icon+" "+s.label));
+    var right=h("div",{style:{textAlign:"right",display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"4px"}});
+    right.appendChild(h("div",{style:{background:s.bg,color:s.color,border:"1px solid "+s.color,borderRadius:"20px",padding:"2px 8px",fontSize:"10px",fontWeight:"700"}},s.icon+" "+s.label));
+    var btnRow=h("div",{style:{display:"flex",gap:"4px"}});
+    var editBtn=h("button",{style:{background:"#1e293b",border:"1px solid #475569",color:"#94a3b8",borderRadius:"6px",padding:"5px 10px",fontSize:"11px",cursor:"pointer"}},"✏️");
+    (function(did){editBtn.addEventListener("click",function(){state.editDrop=did;render();});})(d.id);
     var del=h("button",{class:"del"},"×");
     (function(did){del.addEventListener("click",function(){state.drops=state.drops.filter(function(x){return x.id!==did;});saveToStorage();showToast("🗑 Gelöscht");render();});})(d.id);
-    right.appendChild(del);row.appendChild(right);card.appendChild(row);
+    btnRow.appendChild(editBtn);btnRow.appendChild(del);right.appendChild(btnRow);
+    row.appendChild(right);card.appendChild(row);
     if(p)card.appendChild(h("div",{style:{marginTop:"4px",fontSize:"10px",color:"#555"}},p.catLabel+" · "+p.bodyLabel+" · "+p.transLabel));
     if(d.time){
       var late=d.time>state.cutoffTime;
@@ -828,6 +855,27 @@ function renderResis(){
 
   state.resis.forEach(function(r){
     var p=parseA(r.acriss);
+
+    /* ---- Bearbeiten-Modus ---- */
+    if(state.editResi===r.id){
+      var ec=h("div",{style:{background:"#1a1a2e",borderRadius:"10px",padding:"12px",marginBottom:"8px",border:"1px solid #FF6600"}});
+      ec.appendChild(h("div",{style:{fontSize:"11px",fontWeight:"700",color:"#FF6600",marginBottom:"8px"}},"✏️ Reservierung bearbeiten"));
+      var eg=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"8px"}});
+      function ef(lbl,node){var x=h("div",{});x.appendChild(h("div",{style:{fontSize:"9px",color:"#888",marginBottom:"3px",textTransform:"uppercase"}},lbl));x.appendChild(node);return x;}
+      var rt=h("input",{class:"inp",type:"time",value:r.time||""});rt.addEventListener("input",function(e){r.time=e.target.value;});eg.appendChild(ef("Pickup",rt));
+      var rr=h("input",{class:"inp",value:r.resi||"",style:{fontFamily:"monospace"}});rr.addEventListener("input",function(e){r.resi=e.target.value;});eg.appendChild(ef("Resi-Nr.",rr));
+      var raw=h("div",{});var ra=h("input",{class:"inp",value:r.acriss||"",maxlength:"4",style:{textTransform:"uppercase",fontFamily:"monospace",letterSpacing:"2px"}});ra.addEventListener("input",function(e){r.acriss=e.target.value.toUpperCase().slice(0,4);render();});raw.appendChild(ra);var rpa=parseA(r.acriss);if(rpa)raw.appendChild(h("div",{style:{fontSize:"9px",color:"#4ade80",marginTop:"2px"}},rpa.catLabel+" · "+rpa.bodyLabel+" · "+rpa.transLabel));eg.appendChild(ef("ACRISS",raw));
+      var rd=h("input",{class:"inp",value:r.returnDate||"",placeholder:"12.06."});rd.addEventListener("input",function(e){r.returnDate=e.target.value;});eg.appendChild(ef("Rückgabe",rd));
+      var rl=h("input",{class:"inp",type:"number",value:r.lor||""});rl.addEventListener("input",function(e){r.lor=e.target.value;});eg.appendChild(ef("LOR",rl));
+      var rn=h("input",{class:"inp",value:r.name||""});rn.addEventListener("input",function(e){r.name=e.target.value;});eg.appendChild(ef("Kunde",rn));
+      ec.appendChild(eg);
+      var eb=h("div",{style:{display:"flex",gap:"8px"}});
+      var sb=h("button",{style:{flex:"1",background:"#16a34a",color:"#fff",border:"none",borderRadius:"8px",padding:"10px",fontWeight:"700",cursor:"pointer"}},"✅ Speichern");sb.addEventListener("click",function(){state.editResi=null;saveToStorage();showToast("✅ Gespeichert");render();});
+      var cb=h("button",{style:{flex:"1",background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:"8px",padding:"10px",cursor:"pointer"}},"Abbrechen");cb.addEventListener("click",function(){state.editResi=null;render();});
+      eb.appendChild(sb);eb.appendChild(cb);ec.appendChild(eb);
+      wrap.appendChild(ec);return;
+    }
+
     var card=h("div",{class:"card"});
     var row=h("div",{style:{display:"flex",alignItems:"center",gap:"8px"}});
     row.appendChild(h("div",{style:{fontFamily:"monospace",fontSize:"13px",fontWeight:"700",color:"#FF6600",minWidth:"48px"}},r.time||"–"));
@@ -837,13 +885,17 @@ function renderResis(){
     info.appendChild(h("div",{style:{fontSize:"11px",color:"#888",fontFamily:"monospace"}},r.resi||""));
     info.appendChild(h("div",{style:{fontSize:"10px",color:"#666"}},"bis "+(r.returnDate||"–")+" · LOR "+(r.lor||"–")+"T"));
     row.appendChild(info);
+    var rRight=h("div",{style:{display:"flex",gap:"4px",alignItems:"center"}});
+    var editBtn=h("button",{style:{background:"#1e293b",border:"1px solid #475569",color:"#94a3b8",borderRadius:"6px",padding:"5px 10px",fontSize:"11px",cursor:"pointer"}},"✏️");
+    (function(rid){editBtn.addEventListener("click",function(){state.editResi=rid;render();});})(r.id);
     var del=h("button",{class:"del"},"×");
     (function(rid){del.addEventListener("click",function(){
       state.resis=state.resis.filter(function(x){return x.id!==rid;});
       delete state.overrides[rid];
       saveToStorage();showToast("🗑 Gelöscht");render();
     });})(r.id);
-    row.appendChild(del);card.appendChild(row);
+    rRight.appendChild(editBtn);rRight.appendChild(del);
+    row.appendChild(rRight);card.appendChild(row);
     if(p)card.appendChild(h("div",{style:{marginTop:"4px",fontSize:"10px",color:"#555"}},p.catLabel+" · "+p.bodyLabel+" · "+p.transLabel));
     wrap.appendChild(card);
   });
