@@ -411,6 +411,27 @@ function h(tag,attrs,children){
   return el;
 }
 
+/* ACRISS-Eingabefeld mit Live-Kategorie-Anzeige OHNE render() (Fokus bleibt) */
+function acrissField(initial,onChange){
+  var wrap=h("div",{});
+  var inp=h("input",{class:"inp",maxlength:"4",value:initial||"",placeholder:"CDAR",style:{textTransform:"uppercase",fontFamily:"monospace",letterSpacing:"2px"}});
+  var lbl=h("div",{style:{fontSize:"9px",color:"#4ade80",marginTop:"2px",minHeight:"12px"}});
+  function upd(v){
+    var p=parseA(v);
+    lbl.textContent=(p&&v.length===4)?(p.catLabel+" · "+p.bodyLabel+" · "+p.transLabel):"";
+  }
+  upd(initial||"");
+  inp.addEventListener("input",function(e){
+    var v=e.target.value.toUpperCase().slice(0,4);
+    e.target.value=v;
+    upd(v);
+    onChange(v);            /* nur Daten setzen, KEIN render() */
+  });
+  wrap.appendChild(inp);
+  wrap.appendChild(lbl);
+  return wrap;
+}
+
 /* ============ SCAN BUTTONS ============ */
 function renderScanButtons(){
   var wrap=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"14px"}});
@@ -581,12 +602,7 @@ function renderAvailable(){
   i1.addEventListener("input",function(e){state.na.plate=e.target.value.toUpperCase();});
   grid.appendChild(field("Kennzeichen",i1));
 
-  var acWrap=h("div",{});
-  var i2=h("input",{class:"inp",placeholder:"CDAR",maxlength:"4",value:na.acriss||"",style:{textTransform:"uppercase",fontFamily:"monospace",letterSpacing:"2px"}});
-  i2.addEventListener("input",function(e){state.na.acriss=e.target.value.toUpperCase().slice(0,4);render();});
-  acWrap.appendChild(i2);
-  if(na.acriss&&na.acriss.length===4){var pa=parseA(na.acriss);if(pa)acWrap.appendChild(h("div",{style:{fontSize:"9px",color:"#4ade80",marginTop:"2px"}},pa.catLabel+" · "+pa.bodyLabel+" · "+pa.transLabel));}
-  grid.appendChild(field("ACRISS",acWrap));
+  grid.appendChild(field("ACRISS",acrissField(na.acriss,function(v){state.na.acriss=v;})));
 
   var i3=h("input",{class:"inp",placeholder:"VW Golf",value:na.vehicle||""});
   i3.addEventListener("input",function(e){state.na.vehicle=e.target.value;});
@@ -632,13 +648,7 @@ function renderAvailable(){
       var ePlate=h("input",{class:"inp",value:av.plate||"",style:{fontFamily:"monospace"}});
       ePlate.addEventListener("input",function(e){av.plate=e.target.value.toUpperCase();});
       eg.appendChild(efield("Kennzeichen",ePlate));
-      var eAcrWrap=h("div",{});
-      var eAcr=h("input",{class:"inp",value:av.acriss||"",maxlength:"4",style:{textTransform:"uppercase",fontFamily:"monospace",letterSpacing:"2px"}});
-      eAcr.addEventListener("input",function(e){av.acriss=e.target.value.toUpperCase().slice(0,4);render();});
-      eAcrWrap.appendChild(eAcr);
-      var ep=parseA(av.acriss);
-      if(ep)eAcrWrap.appendChild(h("div",{style:{fontSize:"9px",color:"#4ade80",marginTop:"2px"}},ep.catLabel+" · "+ep.bodyLabel+" · "+ep.transLabel));
-      eg.appendChild(efield("ACRISS",eAcrWrap));
+      eg.appendChild(efield("ACRISS",acrissField(av.acriss,function(v){av.acriss=v;})));
       var eVeh=h("input",{class:"inp",value:av.vehicle||""});
       eVeh.addEventListener("input",function(e){av.vehicle=e.target.value;});
       eg.appendChild(efield("Fahrzeug",eVeh));
@@ -706,12 +716,7 @@ function renderDrops(){
   t2.addEventListener("input",function(e){state.nd.plate=e.target.value.toUpperCase();});
   grid.appendChild(field("Kennzeichen",t2));
 
-  var acw=h("div",{});
-  var t3=h("input",{class:"inp",placeholder:"CDAR",maxlength:"4",value:nd.acriss||"",style:{textTransform:"uppercase",fontFamily:"monospace",letterSpacing:"2px"}});
-  t3.addEventListener("input",function(e){state.nd.acriss=e.target.value.toUpperCase().slice(0,4);render();});
-  acw.appendChild(t3);
-  if(nd.acriss&&nd.acriss.length===4){var pd=parseA(nd.acriss);if(pd)acw.appendChild(h("div",{style:{fontSize:"9px",color:"#4ade80",marginTop:"2px"}},pd.catLabel+" · "+pd.bodyLabel+" · "+pd.transLabel));}
-  grid.appendChild(field("ACRISS",acw));
+  grid.appendChild(field("ACRISS",acrissField(nd.acriss,function(v){state.nd.acriss=v;})));
 
   var t4=h("input",{class:"inp",placeholder:"VW Golf",value:nd.vehicle||""});
   t4.addEventListener("input",function(e){state.nd.vehicle=e.target.value;});
@@ -758,7 +763,7 @@ function renderDrops(){
       function ef(lbl,node){var x=h("div",{});x.appendChild(h("div",{style:{fontSize:"9px",color:"#888",marginBottom:"3px",textTransform:"uppercase"}},lbl));x.appendChild(node);return x;}
       var dt=h("input",{class:"inp",type:"time",value:d.time||""});dt.addEventListener("input",function(e){d.time=e.target.value;});eg.appendChild(ef("Rückgabe",dt));
       var dp=h("input",{class:"inp",value:d.plate||"",style:{fontFamily:"monospace"}});dp.addEventListener("input",function(e){d.plate=e.target.value.toUpperCase();});eg.appendChild(ef("Kennzeichen",dp));
-      var daw=h("div",{});var da=h("input",{class:"inp",value:d.acriss||"",maxlength:"4",style:{textTransform:"uppercase",fontFamily:"monospace",letterSpacing:"2px"}});da.addEventListener("input",function(e){d.acriss=e.target.value.toUpperCase().slice(0,4);render();});daw.appendChild(da);var dpa=parseA(d.acriss);if(dpa)daw.appendChild(h("div",{style:{fontSize:"9px",color:"#4ade80",marginTop:"2px"}},dpa.catLabel+" · "+dpa.bodyLabel+" · "+dpa.transLabel));eg.appendChild(ef("ACRISS",daw));
+      eg.appendChild(ef("ACRISS",acrissField(d.acriss,function(v){d.acriss=v;})));
       var dv=h("input",{class:"inp",value:d.vehicle||""});dv.addEventListener("input",function(e){d.vehicle=e.target.value;});eg.appendChild(ef("Fahrzeug",dv));
       var dl=h("input",{class:"inp",type:"number",value:d.lor||""});dl.addEventListener("input",function(e){d.lor=e.target.value;});eg.appendChild(ef("LOR",dl));
       var ds=h("select",{class:"inp"});[["0","0 – Normal ✅"],["3","3 – Reserviert 🔒"],["4","4 – Aufbereitung ⏳"],["5","5 – Kaputt ❌"]].forEach(function(o){var opt=h("option",{value:o[0]},o[1]);if(d.status===o[0])opt.setAttribute("selected","selected");ds.appendChild(opt);});ds.addEventListener("change",function(e){d.status=e.target.value;});eg.appendChild(ef("Status",ds));
@@ -818,12 +823,7 @@ function renderResis(){
   r2.addEventListener("input",function(e){state.nr.resi=e.target.value;});
   grid.appendChild(field("Resi-Nr.",r2));
 
-  var acw=h("div",{});
-  var r3=h("input",{class:"inp",placeholder:"CDAR",maxlength:"4",value:nr.acriss||"",style:{textTransform:"uppercase",fontFamily:"monospace",letterSpacing:"2px"}});
-  r3.addEventListener("input",function(e){state.nr.acriss=e.target.value.toUpperCase().slice(0,4);render();});
-  acw.appendChild(r3);
-  if(nr.acriss&&nr.acriss.length===4){var pr=parseA(nr.acriss);if(pr)acw.appendChild(h("div",{style:{fontSize:"9px",color:"#4ade80",marginTop:"2px"}},pr.catLabel+" · "+pr.bodyLabel+" · "+pr.transLabel));}
-  grid.appendChild(field("ACRISS",acw));
+  grid.appendChild(field("ACRISS",acrissField(nr.acriss,function(v){state.nr.acriss=v;})));
 
   var r4=h("input",{class:"inp",placeholder:"12.06.",value:nr.returnDate||""});
   r4.addEventListener("input",function(e){state.nr.returnDate=e.target.value;});
@@ -864,7 +864,7 @@ function renderResis(){
       function ef(lbl,node){var x=h("div",{});x.appendChild(h("div",{style:{fontSize:"9px",color:"#888",marginBottom:"3px",textTransform:"uppercase"}},lbl));x.appendChild(node);return x;}
       var rt=h("input",{class:"inp",type:"time",value:r.time||""});rt.addEventListener("input",function(e){r.time=e.target.value;});eg.appendChild(ef("Pickup",rt));
       var rr=h("input",{class:"inp",value:r.resi||"",style:{fontFamily:"monospace"}});rr.addEventListener("input",function(e){r.resi=e.target.value;});eg.appendChild(ef("Resi-Nr.",rr));
-      var raw=h("div",{});var ra=h("input",{class:"inp",value:r.acriss||"",maxlength:"4",style:{textTransform:"uppercase",fontFamily:"monospace",letterSpacing:"2px"}});ra.addEventListener("input",function(e){r.acriss=e.target.value.toUpperCase().slice(0,4);render();});raw.appendChild(ra);var rpa=parseA(r.acriss);if(rpa)raw.appendChild(h("div",{style:{fontSize:"9px",color:"#4ade80",marginTop:"2px"}},rpa.catLabel+" · "+rpa.bodyLabel+" · "+rpa.transLabel));eg.appendChild(ef("ACRISS",raw));
+      eg.appendChild(ef("ACRISS",acrissField(r.acriss,function(v){r.acriss=v;})));
       var rd=h("input",{class:"inp",value:r.returnDate||"",placeholder:"12.06."});rd.addEventListener("input",function(e){r.returnDate=e.target.value;});eg.appendChild(ef("Rückgabe",rd));
       var rl=h("input",{class:"inp",type:"number",value:r.lor||""});rl.addEventListener("input",function(e){r.lor=e.target.value;});eg.appendChild(ef("LOR",rl));
       var rn=h("input",{class:"inp",value:r.name||""});rn.addEventListener("input",function(e){r.name=e.target.value;});eg.appendChild(ef("Kunde",rn));
