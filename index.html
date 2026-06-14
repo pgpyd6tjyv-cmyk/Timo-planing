@@ -100,7 +100,13 @@ function autoMatch(){
   var pool=getPool();
   var used={};
   Object.keys(state.overrides).forEach(function(rid){used[state.overrides[rid]]=true;});
-  return state.resis.map(function(r){
+  // Reservierungen nach Pickup-Uhrzeit sortieren (früheste zuerst)
+  var sortedResis=state.resis.slice().sort(function(a,b){
+    var ta=timeToMin(a.time),tb=timeToMin(b.time);
+    if(ta<0)ta=9999; if(tb<0)tb=9999;
+    return ta-tb;
+  });
+  return sortedResis.map(function(r){
     /* Manueller Override hat Vorrang */
     if(state.overrides[r.id]){
       var ov=pool.filter(function(p){return p.id===state.overrides[r.id];})[0];
