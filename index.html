@@ -201,6 +201,7 @@ function showToast(msg,dur){
 /* ============ FOTO-SCAN (Anthropic) ============ */
 function scanPhoto(file){
   if(!state.apiKey){showToast("⚠️ Erst API Key im Key-Tab eingeben!");return;}
+  var hint=state.tab; // aktueller Tab als Hinweis
   state.scanning=true;render();
   showToast("📸 Foto wird gelesen...",8000);
   var reader=new FileReader();
@@ -208,13 +209,26 @@ function scanPhoto(file){
   reader.onload=function(){
     var base64=String(reader.result).split(",")[1];
     showToast("🤖 KI analysiert...",10000);
-    var prompt='Analysiere diesen Sixt Lynx Fleet Monitor Screenshot.\n'+
-      'Erkenne ob es Drops (Rückgaben mit Return date), Reservations (mit Reservation-Nr und Pickup) oder Available (Bestand an der Station) ist.\n'+
+    var hintText="";
+    if(hint==="resis")hintText='\nHINWEIS: Der Nutzer scannt im Reservierungs-Tab. Wenn unklar, ist es WAHRSCHEINLICH eine Reservierungsliste (type "resis").\n';
+    else if(hint==="available")hintText='\nHINWEIS: Der Nutzer scannt im Available-Tab. Wenn unklar, ist es WAHRSCHEINLICH eine Available-Liste (type "available").\n';
+    else if(hint==="drops")hintText='\nHINWEIS: Der Nutzer scannt im Drops-Tab. Wenn unklar, ist es WAHRSCHEINLICH eine Drops-Liste (type "drops").\n';
+    var prompt='Analysiere diesen Sixt Lynx Fleet Monitor Screenshot. Bestimme ZUERST den Screen-Typ anhand der Spaltenüberschriften:\n'+
+      '\n'+
+      'REGEL ZUR ERKENNUNG (genau in dieser Reihenfolge prüfen):\n'+
+      '1) Wenn es eine Spalte "Reservation" ODER "Name" (Kundenname) ODER "Booking time" ODER "Prepaid" ODER "Payment type" gibt → type ist IMMER "resis". Das ist eine Reservierungsliste.\n'+
+      '2) Sonst wenn es eine Spalte "Rental Agreement" UND "Return date" gibt (Rückgaben) → type ist "drops".\n'+
+      '3) Sonst wenn die Überschrift "Available" lautet und es KEINE Reservation-Nr und KEINEN Kundennamen gibt, nur "Internal number","Licence plate","Vehicle group","Vehicle status" → type ist "available".\n'+
+      '\n'+
+      'WICHTIG: Eine Reservierung hat IMMER eine Reservation-Nummer (z.B. 9734xxxxxx) und/oder einen Kundennamen. Available hat NIEMALS eine Reservation-Nr oder einen Namen. Verwechsle das nicht!\n'+
+      '\n'+
       'Gib NUR JSON zurück, kein anderer Text:\n'+
       'DROPS: {"type":"drops","data":[{"time":"08:00","plate":"M-XX 1234","acriss":"CDAR","vehicle":"VW Golf","lor":"3","status":"0"}]}\n'+
       'RESERVATIONS: {"type":"resis","data":[{"time":"06:00","resi":"9734xxxxxx","acriss":"CDAR","returnDate":"10.06.","lor":"3","name":"Mustermann"}]}\n'+
       'AVAILABLE: {"type":"available","data":[{"plate":"M-XX 1234","acriss":"CDAR","vehicle":"VW Golf","status":"1"}]}\n'+
-      'time immer als HH:MM. status als String. Bei Available den Vehicle-Status übernehmen (1,2,3,4,9,10,11).';
+      '\n'+
+      'time = Pickup date & time als HH:MM. acriss = Vehicle group (4 Zeichen). resi = Reservation-Nummer. name = Kundenname. returnDate = Return date kurz (z.B. 10.06.). lor = Duration in Tagen als Zahl. status als String.\n'+
+      'Bei AVAILABLE: status = Vehicle status (1,2,3,4,9,10,11).'+hintText;
     fetch("https://api.anthropic.com/v1/messages",{
       method:"POST",
       headers:{
