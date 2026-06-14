@@ -192,15 +192,15 @@ function calcDaymin(){
 }
 
 /* ============ STATE ============ */
-var DAYS=["mo","di","mi","do","fr"];
-var DAY_LABELS={mo:"Mo",di:"Di",mi:"Mi",do:"Do",fr:"Fr"};
+var DAYS=["mo","di","mi","do","fr","sa","so"];
+var DAY_LABELS={mo:"Mo",di:"Di",mi:"Mi",do:"Do",fr:"Fr",sa:"Sa",so:"So"};
 
 function emptyDay(){return{date:"",drops:[],resis:[],available:[],overrides:{}};}
 
 var state={
   tab:"plan",
   day:"mo",
-  days:{mo:emptyDay(),di:emptyDay(),mi:emptyDay(),do:emptyDay(),fr:emptyDay()},
+  days:{mo:emptyDay(),di:emptyDay(),mi:emptyDay(),do:emptyDay(),fr:emptyDay(),sa:emptyDay(),so:emptyDay()},
   /* aktive Arbeits-Arrays = spiegeln den gewählten Tag */
   drops:[],
   resis:[],
