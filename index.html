@@ -64,6 +64,33 @@ function timeToMin(t){
   if(!t||t.indexOf(":")<0)return -1;
   var p=t.split(":");return parseInt(p[0],10)*60+parseInt(p[1],10);
 }
+/* "16.06." <-> "2026-06-16" */
+function dateToISO(d){
+  if(!d)return "";
+  var m=d.match(/(\d{1,2})\.(\d{1,2})\.?/);
+  if(!m)return "";
+  var yr=new Date().getFullYear();
+  return yr+"-"+("0"+m[2]).slice(-2)+"-"+("0"+m[1]).slice(-2);
+}
+function isoToDate(iso){
+  if(!iso)return "";
+  var p=iso.split("-");
+  if(p.length<3)return "";
+  return p[2]+"."+p[1]+".";
+}
+
+/* Sitzplaetze: 
+   - body V (2. Stelle) = echter Van: LVxx/WVxx = 9-Sitzer, sonst 7-Sitzer
+   - 4. Stelle V = SUV/PKW mit 7-Sitzer-Funktion (z.B. PFAV, IVAV) */
+function seats(p){
+  if(!p)return 0;
+  if(p.body==="V"){                          /* echter Van */
+    if(p.cat==="L"||p.cat==="W")return 9;     /* LVxx, WVxx = 9-Sitzer */
+    return 7;
+  }
+  if(p.fuel==="V")return 7;                   /* xxxV = 7-Sitzer-Funktion (SUV mit 5+2) */
+  return 5;                                    /* normaler PKW/SUV */
+}
 
 /* ============ MATCHING ============ */
 function score(b,a){
@@ -74,6 +101,9 @@ function score(b,a){
   if(!bp.isElektro&&ap.isElektro)return -999;                  /* Verbrenner → kein Elektro */
   if(ap.isElektro===false&&bp.isElektro)return -999;           /* Elektro-Kunde → nur Elektro */
   if(ap.body==="T"&&ap.catIdx>3&&bp.body!=="T")return -999;    /* Cabrio über C nur an Cabrio-Buchung */
+  /* Sitzplatz-Regeln (auf Basis Sitzzahl, nicht Karosserie) */
+  var bSeats=seats(bp),aSeats=seats(ap);
+  if(bSeats>=7&&aSeats<bSeats)return -999;   /* 7/9-Sitzer-Buchung MUSS genug Sitze bekommen */
   var steps=ap.catIdx-bp.catIdx;
   var s=200;                                                    /* Basis: Kunde wird IMMER bedient */
   if(ap.raw===bp.raw)s+=100;
@@ -82,7 +112,9 @@ function score(b,a){
   if(!bp.isAuto&&!ap.isAuto)s+=70;                             /* Manual→Manual bevorzugt */
   if(!bp.isAuto&&ap.isAuto)s+=5;                               /* Manual→Auto Fallback */
   if(bp.isAuto&&ap.isAuto)s+=20;
+  if(bSeats>=7&&aSeats===bSeats)s+=40;                        /* exakte Sitzzahl bevorzugt */
   s-=steps*8;                                                  /* nächstmögliches Upgrade */
+  s-=(aSeats-bSeats)*3;                                        /* nicht unnötig viele Sitze verschenken */
   return s;
 }
 
@@ -153,21 +185,30 @@ function calcDaymin(){
   var dr=state.drops.filter(function(d){
     var s=parseInt(d.status,10)||0;
     if(PLANBAR_DROP.indexOf(s)<0)return false;
-    if(d.time&&d.time>"14:30")return false;   /* nach 14:30 → erst morgen */
+    if(d.time&&d.time>state.cutoffTime)return false;   /* nach Cutoff → erst morgen */
     return true;
   }).length;
   return av+dr-state.resis.length;
 }
 
 /* ============ STATE ============ */
+var DAYS=["mo","di","mi","do","fr"];
+var DAY_LABELS={mo:"Mo",di:"Di",mi:"Mi",do:"Do",fr:"Fr"};
+
+function emptyDay(){return{date:"",drops:[],resis:[],available:[],overrides:{}};}
+
 var state={
   tab:"plan",
+  day:"mo",
+  days:{mo:emptyDay(),di:emptyDay(),mi:emptyDay(),do:emptyDay(),fr:emptyDay()},
+  /* aktive Arbeits-Arrays = spiegeln den gewählten Tag */
   drops:[],
   resis:[],
   available:[],
   overrides:{},
   changeModal:null,
   apiKey:"",
+  cutoffTime:"14:30",
   scanning:false,
   toast:"",
   nd:{time:"",plate:"",acriss:"",vehicle:"",lor:"",status:"0"},
@@ -175,25 +216,90 @@ var state={
   na:{plate:"",acriss:"",vehicle:"",status:"1"}
 };
 
+/* Aktive Arrays in den Tag-Speicher zurückschreiben */
+function syncActiveToDay(){
+  var d=state.days[state.day];
+  if(!d)return;
+  d.drops=state.drops;
+  d.resis=state.resis;
+  d.available=state.available;
+  d.overrides=state.overrides;
+}
+/* Tag wechseln: erst aktuellen Tag sichern, dann neuen laden */
+function selectDay(dayKey){
+  syncActiveToDay();
+  state.day=dayKey;
+  var d=state.days[dayKey];
+  state.drops=d.drops;
+  state.resis=d.resis;
+  state.available=d.available;
+  state.overrides=d.overrides;
+  state.changeModal=null;
+}
+
+/* Rollover: Drops nach Cutoff von einem Tag → Available am Folgetag */
+function applyRollover(){
+  syncActiveToDay();
+  for(var i=0;i<DAYS.length-1;i++){
+    var today=state.days[DAYS[i]];
+    var next=state.days[DAYS[i+1]];
+    /* alte Rollover-Einträge des Folgetags entfernen (neu berechnen) */
+    next.available=next.available.filter(function(a){return !a._rollover;});
+    today.drops.forEach(function(d){
+      var s=parseInt(d.status,10)||0;
+      if(PLANBAR_DROP.indexOf(s)<0)return;        /* kaputt/Status3 nicht */
+      if(d.time&&d.time>state.cutoffTime){         /* nach Cutoff → Folgetag */
+        next.available.push({
+          id:"ro"+d.id,plate:d.plate,acriss:d.acriss,vehicle:d.vehicle,
+          status:"1",_rollover:true,_fromDay:DAYS[i]
+        });
+      }
+    });
+  }
+  /* aktive Arrays neu laden falls aktueller Tag betroffen */
+  var cur=state.days[state.day];
+  state.available=cur.available;
+}
+
 function saveToStorage(){
   try{
-    localStorage.setItem("fleet_drops",JSON.stringify(state.drops));
-    localStorage.setItem("fleet_resis",JSON.stringify(state.resis));
-    localStorage.setItem("fleet_overrides",JSON.stringify(state.overrides));
-    localStorage.setItem("fleet_available",JSON.stringify(state.available));
+    syncActiveToDay();
+    applyRollover();
+    localStorage.setItem("fleet_days",JSON.stringify(state.days));
+    localStorage.setItem("fleet_day",state.day);
+    localStorage.setItem("fleet_cutoff",state.cutoffTime);
   }catch(e){}
 }
 function loadFromStorage(){
   try{
     state.apiKey=localStorage.getItem("sixt_api_key")||"";
-    var d=localStorage.getItem("fleet_drops");
-    var r=localStorage.getItem("fleet_resis");
-    var o=localStorage.getItem("fleet_overrides");
-    var a=localStorage.getItem("fleet_available");
-    if(d)state.drops=JSON.parse(d);
-    if(r)state.resis=JSON.parse(r);
-    if(o)state.overrides=JSON.parse(o);
-    if(a)state.available=JSON.parse(a);
+    var c=localStorage.getItem("fleet_cutoff");
+    if(c)state.cutoffTime=c;
+    var daysRaw=localStorage.getItem("fleet_days");
+    var dayCur=localStorage.getItem("fleet_day");
+    if(daysRaw){
+      var parsed=JSON.parse(daysRaw);
+      DAYS.forEach(function(k){ if(!parsed[k])parsed[k]=emptyDay(); });
+      state.days=parsed;
+      state.day=(dayCur&&state.days[dayCur])?dayCur:"mo";
+    }else{
+      /* Migration: alte Einzeltag-Daten in Montag übernehmen */
+      var od=localStorage.getItem("fleet_drops");
+      var or=localStorage.getItem("fleet_resis");
+      var oo=localStorage.getItem("fleet_overrides");
+      var oa=localStorage.getItem("fleet_available");
+      if(od||or||oa){
+        var mo=state.days.mo;
+        if(od)mo.drops=JSON.parse(od);
+        if(or)mo.resis=JSON.parse(or);
+        if(oo)mo.overrides=JSON.parse(oo);
+        if(oa)mo.available=JSON.parse(oa);
+      }
+      state.day="mo";
+    }
+    /* aktive Arrays aus gewähltem Tag laden */
+    var d=state.days[state.day];
+    state.drops=d.drops;state.resis=d.resis;state.available=d.available;state.overrides=d.overrides;
   }catch(e){}
 }
 
@@ -358,6 +464,37 @@ function renderPlan(){
   });
   wrap.appendChild(kpis);
 
+  // Datum für diesen Tag
+  var dateBox=h("div",{style:{display:"flex",alignItems:"center",gap:"10px",background:"#131325",border:"1px solid #2a2a45",borderRadius:"10px",padding:"10px 12px",marginBottom:"10px"}});
+  dateBox.appendChild(h("div",{style:{fontSize:"18px"}},"📅"));
+  var dateLbl=h("div",{style:{flex:"1"}});
+  dateLbl.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:"#e8e8f0"}},"Datum "+DAY_LABELS[state.day]));
+  dateLbl.appendChild(h("div",{style:{fontSize:"10px",color:"#888"}},"Tag des Wochenplans"));
+  dateBox.appendChild(dateLbl);
+  var dateInp=h("input",{type:"date",value:dateToISO(state.days[state.day].date),style:{background:"#0d0d1a",border:"1px solid #FF660055",borderRadius:"8px",color:"#FF6600",padding:"8px 10px",fontSize:"14px",fontWeight:"700",fontFamily:"monospace",outline:"none"}});
+  dateInp.addEventListener("change",function(e){
+    var iso=e.target.value;
+    state.days[state.day].date=isoToDate(iso);
+    saveToStorage();showToast("📅 Datum gesetzt");render();
+  });
+  dateBox.appendChild(dateInp);
+  wrap.appendChild(dateBox);
+
+  // Cutoff-Zeit einstellbar
+  var cutoffBox=h("div",{style:{display:"flex",alignItems:"center",gap:"10px",background:"#131325",border:"1px solid #2a2a45",borderRadius:"10px",padding:"10px 12px",marginBottom:"14px"}});
+  cutoffBox.appendChild(h("div",{style:{fontSize:"18px"}},"⏰"));
+  var cutoffLbl=h("div",{style:{flex:"1"}});
+  cutoffLbl.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:"#e8e8f0"}},"Aufbereitung bis"));
+  cutoffLbl.appendChild(h("div",{style:{fontSize:"10px",color:"#888"}},"Drops nach dieser Zeit → erst morgen"));
+  cutoffBox.appendChild(cutoffLbl);
+  var cutoffInp=h("input",{type:"time",value:state.cutoffTime,style:{background:"#0d0d1a",border:"1px solid #FF660055",borderRadius:"8px",color:"#FF6600",padding:"8px 10px",fontSize:"15px",fontWeight:"700",fontFamily:"monospace",outline:"none"}});
+  cutoffInp.addEventListener("change",function(e){
+    state.cutoffTime=e.target.value||"14:30";
+    saveToStorage();showToast("⏰ Aufbereitungszeit: "+state.cutoffTime);render();
+  });
+  cutoffBox.appendChild(cutoffInp);
+  wrap.appendChild(cutoffBox);
+
   matches.forEach(function(m){
     var ba=parseA(m.r.acriss),da=m.d?parseA(m.d.acriss):null;
     var sc=m.type==="exact"?{lbl:"✅ Exakt",bdr:"#16a34a",bg:"#dcfce7",txt:"#15803d"}
@@ -413,7 +550,7 @@ function renderPlan(){
 
   var rules=h("div",{style:{background:"#1a0a00",border:"1px solid #FF660044",borderRadius:"12px",padding:"12px",marginTop:"4px"}});
   rules.appendChild(h("div",{style:{fontWeight:"700",color:"#FF6600",marginBottom:"8px",fontSize:"12px"}},"🚨 Regeln"));
-  ["Volle Auslastung – jeder Kunde bekommt ein Auto","Manual + Manual verfügbar → Manual ✅","Automatik → NUR Automatik ❌","Kein Downgrade ❌","Verbrenner-Kunde → kein Elektro ❌","Elektro nur an Elektro-Kunden 🔋","Cabrio über C-Klasse nur an Cabrio-Buchung 🚗","Avail Status 3 = nicht im Bestand 🔒","Drop nach 14:30 → Folgetag ⏰","Drop + 1h Aufbereitung vor Pickup ⏳"].forEach(function(r){
+  ["Volle Auslastung – jeder Kunde bekommt ein Auto","Manual + Manual verfügbar → Manual ✅","Automatik → NUR Automatik ❌","Kein Downgrade ❌","Verbrenner-Kunde → kein Elektro ❌","Elektro nur an Elektro-Kunden 🔋","Cabrio über C-Klasse nur an Cabrio-Buchung 🚗","Avail Status 3 = nicht im Bestand 🔒","Drop nach "+state.cutoffTime+" → Folgetag ⏰","Drop + 1h Aufbereitung vor Pickup ⏳"].forEach(function(r){
     rules.appendChild(h("div",{style:{fontSize:"11px",color:"#ccc",padding:"3px 0",borderBottom:"1px solid #2a1500"}},r));
   });
   wrap.appendChild(rules);
@@ -579,9 +716,9 @@ function renderDrops(){
     right.appendChild(del);row.appendChild(right);card.appendChild(row);
     if(p)card.appendChild(h("div",{style:{marginTop:"4px",fontSize:"10px",color:"#555"}},p.catLabel+" · "+p.bodyLabel+" · "+p.transLabel));
     if(d.time){
-      var late=d.time>"14:30";
+      var late=d.time>state.cutoffTime;
       card.appendChild(h("div",{style:{fontSize:"10px",fontWeight:"700",marginTop:"3px",color:late?"#f59e0b":"#4ade80"}},
-        late?"⏰ Nach 14:30 → erst morgen verfügbar":"✅ Vor 14:30 → heute verfügbar (+1h Aufbereitung)"));
+        late?"⏰ Nach "+state.cutoffTime+" → erst morgen verfügbar":"✅ Vor "+state.cutoffTime+" → heute verfügbar (+1h Aufbereitung)"));
     }
     wrap.appendChild(card);
   });
@@ -704,15 +841,32 @@ function renderKey(){
 
   var reset=h("div",{class:"card"});
   reset.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700",color:"#f87171",marginBottom:"8px"}},"🗑 Daten zurücksetzen"));
+  reset.appendChild(h("div",{style:{fontSize:"10px",color:"#888",marginBottom:"8px"}},"Aktueller Tag: "+DAY_LABELS[state.day]));
   var btns=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}});
-  [["Drops leeren",function(){state.drops=[];}],["Resis leeren",function(){state.resis=[];state.overrides={};}],["Avail leeren",function(){state.available=[];}],["ALLES leeren",function(){state.drops=[];state.resis=[];state.available=[];state.overrides={};}]].forEach(function(pair){
+  [
+    ["Drops (Tag)",function(){state.drops=[];}],
+    ["Resis (Tag)",function(){state.resis=[];state.overrides={};}],
+    ["Avail (Tag)",function(){state.available=[];}],
+    ["Tag leeren",function(){state.drops=[];state.resis=[];state.available=[];state.overrides={};}]
+  ].forEach(function(pair){
     var b=h("button",{style:{background:"#2a1515",border:"1px solid #dc2626",color:"#f87171",borderRadius:"8px",padding:"10px",cursor:"pointer",fontSize:"12px"}},pair[0]);
     b.addEventListener("click",function(){
-      if(confirm(pair[0]+"?")){pair[1]();saveToStorage();showToast("🗑 Erledigt");render();}
+      if(confirm(pair[0]+" – "+DAY_LABELS[state.day]+"?")){pair[1]();saveToStorage();showToast("🗑 Erledigt");render();}
     });
     btns.appendChild(b);
   });
-  reset.appendChild(btns);wrap.appendChild(reset);
+  reset.appendChild(btns);
+  var weekBtn=h("button",{style:{background:"#450a0a",border:"1px solid #dc2626",color:"#f87171",borderRadius:"8px",padding:"11px",cursor:"pointer",fontSize:"12px",fontWeight:"700",width:"100%",marginTop:"8px"}},"⚠️ GANZE WOCHE leeren (Mo–Fr)");
+  weekBtn.addEventListener("click",function(){
+    if(confirm("Wirklich die GANZE Woche Mo–Fr löschen?")){
+      DAYS.forEach(function(k){state.days[k]=emptyDay();});
+      var d=state.days[state.day];
+      state.drops=d.drops;state.resis=d.resis;state.available=d.available;state.overrides=d.overrides;
+      saveToStorage();showToast("🗑 Ganze Woche geleert");render();
+    }
+  });
+  reset.appendChild(weekBtn);
+  wrap.appendChild(reset);
   return wrap;
 }
 
@@ -808,6 +962,21 @@ function render(){
   });
   hdr.appendChild(tabs);
   app.appendChild(hdr);
+
+  /* Tag-Auswahl Mo-Fr */
+  var dayBar=h("div",{style:{display:"flex",gap:"4px",background:"#0d0d1a",padding:"8px 10px",position:"sticky",top:"52px",zIndex:"99",borderBottom:"1px solid #1f1f35"}});
+  DAYS.forEach(function(dk){
+    var dd=state.days[dk];
+    var active=state.day===dk;
+    var hasData=dd&&(dd.drops.length||dd.resis.length||dd.available.length);
+    var btn=h("button",{style:{flex:"1",background:active?"#FF6600":"#1a1a2e",color:active?"#fff":"#888",border:"1px solid "+(active?"#FF6600":"#2a2a45"),borderRadius:"8px",padding:"7px 2px",cursor:"pointer",textAlign:"center"}});
+    btn.appendChild(h("div",{style:{fontSize:"12px",fontWeight:"700"}},DAY_LABELS[dk]));
+    btn.appendChild(h("div",{style:{fontSize:"8px",opacity:"0.8",fontFamily:"monospace",marginTop:"1px"}},(dd&&dd.date)?dd.date:"—"));
+    if(hasData)btn.appendChild(h("div",{style:{fontSize:"7px",color:active?"#fff":"#4ade80",marginTop:"1px"}},"●"));
+    (function(k){btn.addEventListener("click",function(){selectDay(k);render();});})(dk);
+    dayBar.appendChild(btn);
+  });
+  app.appendChild(dayBar);
 
   /* Toast */
   if(state.toast){
