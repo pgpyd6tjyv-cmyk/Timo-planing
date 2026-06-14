@@ -207,6 +207,7 @@ var state={
   available:[],
   overrides:{},
   changeModal:null,
+  editAvail:null,
   apiKey:"",
   cutoffTime:"14:30",
   scanning:false,
@@ -619,6 +620,46 @@ function renderAvailable(){
     var s=STATUS[av.status]||STATUS["1"];
     var p=parseA(av.acriss);
     var blocked=av.status==="3"||av.status==="5"||av.status==="6";
+
+    /* ---- Bearbeiten-Modus ---- */
+    if(state.editAvail===av.id){
+      var ecard=h("div",{style:{background:"#1a1a2e",borderRadius:"10px",padding:"12px",marginBottom:"8px",border:"1px solid #FF6600"}});
+      ecard.appendChild(h("div",{style:{fontSize:"11px",fontWeight:"700",color:"#FF6600",marginBottom:"8px"}},"✏️ Bearbeiten"));
+      var eg=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"8px"}});
+      function efield(lbl,node){var d=h("div",{});d.appendChild(h("div",{style:{fontSize:"9px",color:"#888",marginBottom:"3px",textTransform:"uppercase"}},lbl));d.appendChild(node);return d;}
+      var ePlate=h("input",{class:"inp",value:av.plate||"",style:{fontFamily:"monospace"}});
+      ePlate.addEventListener("input",function(e){av.plate=e.target.value.toUpperCase();});
+      eg.appendChild(efield("Kennzeichen",ePlate));
+      var eAcrWrap=h("div",{});
+      var eAcr=h("input",{class:"inp",value:av.acriss||"",maxlength:"4",style:{textTransform:"uppercase",fontFamily:"monospace",letterSpacing:"2px"}});
+      eAcr.addEventListener("input",function(e){av.acriss=e.target.value.toUpperCase().slice(0,4);render();});
+      eAcrWrap.appendChild(eAcr);
+      var ep=parseA(av.acriss);
+      if(ep)eAcrWrap.appendChild(h("div",{style:{fontSize:"9px",color:"#4ade80",marginTop:"2px"}},ep.catLabel+" · "+ep.bodyLabel+" · "+ep.transLabel));
+      eg.appendChild(efield("ACRISS",eAcrWrap));
+      var eVeh=h("input",{class:"inp",value:av.vehicle||""});
+      eVeh.addEventListener("input",function(e){av.vehicle=e.target.value;});
+      eg.appendChild(efield("Fahrzeug",eVeh));
+      var eSel=h("select",{class:"inp"});
+      [["1","1 – Vermietbereit ✅"],["2","2 – Vermietbereit ✅"],["3","3 – Nicht im Bestand 🔒"],["4","4 – Verfügbar ✅"],["9","9 – Verfügbar ✅"],["10","10 – Aufbereitung ⏳"],["11","11 – Aufbereitung ⏳"],["5","5 – Kaputt ❌"]].forEach(function(o){
+        var opt=h("option",{value:o[0]},o[1]);
+        if(av.status===o[0])opt.setAttribute("selected","selected");
+        eSel.appendChild(opt);
+      });
+      eSel.addEventListener("change",function(e){av.status=e.target.value;});
+      eg.appendChild(efield("Status",eSel));
+      ecard.appendChild(eg);
+      var eBtns=h("div",{style:{display:"flex",gap:"8px"}});
+      var saveB=h("button",{style:{flex:"1",background:"#16a34a",color:"#fff",border:"none",borderRadius:"8px",padding:"10px",fontWeight:"700",cursor:"pointer"}},"✅ Speichern");
+      saveB.addEventListener("click",function(){state.editAvail=null;saveToStorage();showToast("✅ Gespeichert");render();});
+      var cancelB=h("button",{style:{flex:"1",background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:"8px",padding:"10px",cursor:"pointer"}},"Abbrechen");
+      cancelB.addEventListener("click",function(){state.editAvail=null;render();});
+      eBtns.appendChild(saveB);eBtns.appendChild(cancelB);
+      ecard.appendChild(eBtns);
+      wrap.appendChild(ecard);
+      return;
+    }
+
     var card=h("div",{style:{background:blocked?"#1a0a0a":"#131325",borderRadius:"10px",padding:"12px",marginBottom:"8px",border:"1px solid "+(blocked?"#dc262644":"#1f1f35"),opacity:blocked?"0.8":"1"}});
     var row=h("div",{style:{display:"flex",alignItems:"center",gap:"8px"}});
     var info2=h("div",{style:{flex:"1"}});
@@ -627,11 +668,16 @@ function renderAvailable(){
     info2.appendChild(h("div",{style:{fontSize:"10px",color:"#666",fontFamily:"monospace"}},av.plate||""));
     if(av.status==="3")info2.appendChild(h("div",{style:{fontSize:"10px",color:"#f87171",fontWeight:"700"}},"🔒 Nicht im Bestand – wird nicht verplant"));
     row.appendChild(info2);
-    var right=h("div",{style:{textAlign:"right"}});
-    right.appendChild(h("div",{style:{background:s.bg,color:s.color,border:"1px solid "+s.color,borderRadius:"20px",padding:"2px 8px",fontSize:"10px",fontWeight:"700",marginBottom:"4px"}},s.icon+" "+s.label));
+    var right=h("div",{style:{textAlign:"right",display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"4px"}});
+    right.appendChild(h("div",{style:{background:s.bg,color:s.color,border:"1px solid "+s.color,borderRadius:"20px",padding:"2px 8px",fontSize:"10px",fontWeight:"700"}},s.icon+" "+s.label));
+    var btnRow=h("div",{style:{display:"flex",gap:"4px"}});
+    var editBtn=h("button",{style:{background:"#1e293b",border:"1px solid #475569",color:"#94a3b8",borderRadius:"6px",padding:"5px 10px",fontSize:"11px",cursor:"pointer"}},"✏️");
+    (function(aid){editBtn.addEventListener("click",function(){state.editAvail=aid;render();});})(av.id);
     var del=h("button",{class:"del"},"×");
     (function(aid){del.addEventListener("click",function(){state.available=state.available.filter(function(x){return x.id!==aid;});saveToStorage();showToast("🗑 Gelöscht");render();});})(av.id);
-    right.appendChild(del);row.appendChild(right);card.appendChild(row);
+    btnRow.appendChild(editBtn);btnRow.appendChild(del);
+    right.appendChild(btnRow);
+    row.appendChild(right);card.appendChild(row);
     if(p&&!blocked)card.appendChild(h("div",{style:{marginTop:"4px",fontSize:"10px",color:"#555"}},p.catLabel+" · "+p.bodyLabel+" · "+p.transLabel));
     wrap.appendChild(card);
   });
