@@ -240,24 +240,59 @@ function selectDay(dayKey){
   state.changeModal=null;
 }
 
-/* Rollover: Drops nach Cutoff von einem Tag → Available am Folgetag */
+/* Welche Available-Autos eines Tages wurden NICHT verplant? + späte Drops */
+function computeRolloverFrom(dayKey){
+  var day=state.days[dayKey];
+  if(!day)return [];
+  var out=[];
+  /* 1. Späte Drops (nach Cutoff) → Folgetag, egal ob verplant (Auto kommt erst spät) */
+  day.drops.forEach(function(d){
+    var s=parseInt(d.status,10)||0;
+    if(PLANBAR_DROP.indexOf(s)<0)return;          /* kaputt/Status3 nicht */
+    if(d.time&&d.time>state.cutoffTime){
+      out.push({id:"ro_d"+d.id,plate:d.plate,acriss:d.acriss,vehicle:d.vehicle,status:"1",_rollover:true,_fromDay:dayKey});
+    }
+  });
+  /* 2. Übrige Available-Autos: die an diesem Tag NICHT verplant wurden */
+  var matches=matchForDay(dayKey);
+  var usedIds={};
+  matches.forEach(function(m){ if(m.d)usedIds[m.d.id]=true; });
+  day.available.forEach(function(a){
+    var s=parseInt(a.status,10)||0;
+    /* Status 3/5/6 wandert NICHT (vermietet/abgeholt/kaputt) */
+    if(PLANBAR_AVAIL.indexOf(s)<0)return;
+    /* schon einem Kunden zugeteilt? dann ist es vergeben */
+    if(usedIds["av"+a.id])return;
+    /* übrig → wandert weiter */
+    out.push({id:"ro_a"+a.id,plate:a.plate,acriss:a.acriss,vehicle:a.vehicle,status:"1",_rollover:true,_fromDay:dayKey});
+  });
+  return out;
+}
+
+/* Matching für einen beliebigen Tag berechnen (ohne aktiven Tag zu stören) */
+function matchForDay(dayKey){
+  var day=state.days[dayKey];
+  if(!day)return [];
+  /* temporär aktive Arrays umbiegen */
+  var bd=state.drops,br=state.resis,ba=state.available,bo=state.overrides;
+  state.drops=day.drops;state.resis=day.resis;state.available=day.available;state.overrides=day.overrides;
+  var res=autoMatch();
+  state.drops=bd;state.resis=br;state.available=ba;state.overrides=bo;
+  return res;
+}
+
+/* Rollover: späte Drops + unverplante Available → Folgetag Available */
 function applyRollover(){
   syncActiveToDay();
+  /* erst alle alten Rollover-Einträge entfernen, damit sauber neu berechnet wird */
+  DAYS.forEach(function(k){
+    state.days[k].available=state.days[k].available.filter(function(a){return !a._rollover;});
+  });
+  /* dann von Tag zu Tag durchrechnen (Kette: Mo-Reste landen Di, Di-Reste -> Mi ...) */
   for(var i=0;i<DAYS.length-1;i++){
-    var today=state.days[DAYS[i]];
+    var carry=computeRolloverFrom(DAYS[i]);
     var next=state.days[DAYS[i+1]];
-    /* alte Rollover-Einträge des Folgetags entfernen (neu berechnen) */
-    next.available=next.available.filter(function(a){return !a._rollover;});
-    today.drops.forEach(function(d){
-      var s=parseInt(d.status,10)||0;
-      if(PLANBAR_DROP.indexOf(s)<0)return;        /* kaputt/Status3 nicht */
-      if(d.time&&d.time>state.cutoffTime){         /* nach Cutoff → Folgetag */
-        next.available.push({
-          id:"ro"+d.id,plate:d.plate,acriss:d.acriss,vehicle:d.vehicle,
-          status:"1",_rollover:true,_fromDay:DAYS[i]
-        });
-      }
-    });
+    carry.forEach(function(c){ next.available.push(c); });
   }
   /* aktive Arrays neu laden falls aktueller Tag betroffen */
   var cur=state.days[state.day];
