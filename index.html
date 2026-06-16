@@ -92,20 +92,38 @@ function seats(p){
   return 5;                                    /* normaler PKW/SUV */
 }
 
-/* Reservierung als bedient markieren: Resi raus, zugeteiltes Auto vergeben */
+/* Reservierung als bedient markieren: Resi raus, zugeteiltes Auto KOMPLETT vergeben */
 function markServed(match){
   var r=match.r,d=match.d;
   /* Reservierung entfernen */
   state.resis=state.resis.filter(function(x){return x.id!==r.id;});
   delete state.overrides[r.id];
-  /* zugeteiltes Auto entfernen (ist jetzt vermietet/abgeholt) */
   if(d){
-    /* Pool-IDs haben Präfix: "av"+id (Available) oder "dr"+id (Drop) */
-    state.available=state.available.filter(function(a){return a.id!==d.id&&("av"+a.id)!==d.id;});
-    state.drops=state.drops.filter(function(x){return x.id!==d.id&&("dr"+x.id)!==d.id;});
+    var plate=(d.plate||"").trim().toUpperCase();
+    /* aktuellen Tag erst sichern */
+    syncActiveToDay();
+    if(plate){
+      /* Auto per Kennzeichen an ALLEN Tagen entfernen – echt UND gerollt.
+         So kann der Rollover es nicht neu erzeugen und es bleibt nirgends hängen. */
+      DAYS.forEach(function(k){
+        var day=state.days[k];
+        day.available=day.available.filter(function(a){return (a.plate||"").trim().toUpperCase()!==plate;});
+        day.drops=day.drops.filter(function(x){return (x.plate||"").trim().toUpperCase()!==plate;});
+      });
+    }else{
+      /* kein Kennzeichen → nur das genaue Pool-Objekt entfernen */
+      DAYS.forEach(function(k){
+        var day=state.days[k];
+        day.available=day.available.filter(function(a){return a.id!==d.id&&("av"+a.id)!==d.id;});
+        day.drops=day.drops.filter(function(x){return x.id!==d.id&&("dr"+x.id)!==d.id;});
+      });
+    }
+    /* aktive Arrays neu aus dem geputzten Tag laden */
+    var cur=state.days[state.day];
+    state.drops=cur.drops;state.resis=cur.resis;state.available=cur.available;state.overrides=cur.overrides;
   }
   saveToStorage();
-  showToast("✅ "+(r.resi||"Resi")+" bedient – "+(d?d.acriss:"")+" vergeben");
+  showToast("✅ "+(r.resi||"Resi")+" bedient – "+(d?(d.acriss+" "+(d.plate||"")):"")+" vergeben");
   render();
 }
 
