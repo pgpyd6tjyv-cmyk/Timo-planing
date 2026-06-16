@@ -158,7 +158,10 @@ function getPool(){
     return PLANBAR_AVAIL.indexOf(parseInt(a.status,10)||0)>=0;
   }).map(function(a){return{id:"av"+a.id,plate:a.plate,acriss:a.acriss,vehicle:a.vehicle,lor:a.lor||"",status:a.status,time:"",src:"avail"};});
   var drops=state.drops.filter(function(d){
-    return PLANBAR_DROP.indexOf(parseInt(d.status,10)||0)>=0;
+    if(PLANBAR_DROP.indexOf(parseInt(d.status,10)||0)<0)return false;
+    /* Drop NACH Cutoff → heute NICHT verfügbar (kommt nach Geschäftsschluss, rollt zum Folgetag) */
+    if(d.time&&d.time>state.cutoffTime)return false;
+    return true;
   }).map(function(d){return{id:"dr"+d.id,plate:d.plate,acriss:d.acriss,vehicle:d.vehicle,lor:d.lor||"",status:d.status,time:d.time||"",src:"drop"};});
   return avail.concat(drops);
 }
