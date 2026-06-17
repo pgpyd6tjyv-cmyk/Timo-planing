@@ -127,6 +127,25 @@ function markServed(match){
   render();
 }
 
+/* Fahrzeug löschen: gerollte Autos an der Quelle (per Kennzeichen, alle Tage),
+   echte Autos nur am aktuellen Tag per ID. So kommt nichts durch Rollover zurück. */
+function deleteAvail(av){
+  var plate=(av.plate||"").trim().toUpperCase();
+  if(av._rollover&&plate){
+    syncActiveToDay();
+    DAYS.forEach(function(k){
+      var day=state.days[k];
+      day.available=day.available.filter(function(x){return (x.plate||"").trim().toUpperCase()!==plate;});
+      day.drops=day.drops.filter(function(x){return (x.plate||"").trim().toUpperCase()!==plate;});
+    });
+    var cur=state.days[state.day];
+    state.drops=cur.drops;state.resis=cur.resis;state.available=cur.available;state.overrides=cur.overrides;
+  }else{
+    state.available=state.available.filter(function(x){return x.id!==av.id;});
+  }
+  saveToStorage();showToast("🗑 Gelöscht");render();
+}
+
 /* ============ MATCHING ============ */
 function score(b,a){
   var bp=parseA(b),ap=parseA(a);
@@ -767,7 +786,7 @@ function renderAvailable(){
     var editBtn=h("button",{style:{background:"#1e293b",border:"1px solid #475569",color:"#94a3b8",borderRadius:"6px",padding:"5px 10px",fontSize:"11px",cursor:"pointer"}},"✏️");
     (function(aid){editBtn.addEventListener("click",function(){state.editAvail=aid;render();});})(av.id);
     var del=h("button",{class:"del"},"×");
-    (function(aid){del.addEventListener("click",function(){state.available=state.available.filter(function(x){return x.id!==aid;});saveToStorage();showToast("🗑 Gelöscht");render();});})(av.id);
+    (function(avObj){del.addEventListener("click",function(){deleteAvail(avObj);});})(av);
     btnRow.appendChild(editBtn);btnRow.appendChild(del);
     right.appendChild(btnRow);
     row.appendChild(right);card.appendChild(row);
